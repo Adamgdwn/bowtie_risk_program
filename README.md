@@ -1,36 +1,71 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Bowtie Risk Builder MVP
 
-## Getting Started
+Next.js + TypeScript MVP for building Bowtie diagrams with guided structure, drag-and-drop editing, AI suggestion placeholders, Supabase auth/data, and Stripe subscription hooks.
 
-First, run the development server:
+## Implemented
 
+- Supabase email/password auth with signup verification messaging.
+- Three-tier account model support in settings and project limits:
+  - `free`: 2 projects, BYOK
+  - `pro`: unlimited, BYOK
+  - `team`: unlimited, managed model placeholder
+- Dashboard for creating/listing/opening projects.
+- Project creation: `title + industry + top event + optional context`.
+- Visual editor (React Flow) with:
+  - block palette
+  - pan/zoom
+  - snap-to-grid
+  - connect edges
+  - right inspector panel
+  - autosave to Postgres via API
+  - soft validation warnings
+  - PNG export + JSON import/export
+  - worksheet mode with structured 8-step bowtie procedure synced to Supabase
+- Settings page:
+  - encrypted server-side API key storage
+  - explicit BYOK provider selection (auto/openai/openrouter/anthropic/gemini)
+  - model selection placeholder for managed top-tier mode
+- Stripe checkout session endpoint + webhook placeholder.
+- Supabase SQL schema + RLS policies for:
+  - `projects`
+  - `nodes`
+  - `edges`
+  - `user_settings`
+
+## Placeholder Areas (by design)
+
+- Managed LLM mode for `$30` tier is scaffolded as a backend placeholder contract in `src/lib/ai/suggestions.ts`.
+- Stripe webhook plan-sync logic is intentionally stubbed in `src/app/api/stripe/webhook/route.ts`.
+- AI calls return deterministic fallback suggestions until provider integration is wired.
+
+## Setup
+
+1. Install dependencies:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Copy environment template and fill values:
+```bash
+cp .env.example .env.local
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+3. Run SQL in Supabase SQL editor:
+- `supabase/schema.sql`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+4. In Supabase Auth settings:
+- enable email/password
+- configure email confirmation flow
+- set site URL / redirect URL
 
-## Learn More
+5. Run dev server:
+```bash
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Recommended Next Steps
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Add service-role secured model gateway for managed team plan inference and usage metering.
+2. Add subscription status sync from Stripe webhook to `user_settings.plan_tier`.
+3. Add role-based collaboration tables (`project_members`, invitations, permissions).
+4. Add optional version snapshots (`project_snapshots`) for rollback/history.
