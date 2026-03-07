@@ -65,7 +65,7 @@ Next.js + TypeScript MVP for building Bowtie diagrams with guided structure, dra
   - `projects`
   - `nodes`
   - `edges`
-  - `user_settings`
+  - `user_settings` (includes `email`, `username`, plan tier, and AI settings)
   - `user_profiles`
   - `account_directory` view (`email + username + plan_tier`)
 

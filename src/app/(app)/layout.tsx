@@ -3,7 +3,12 @@ import { requireUser } from "@/lib/auth";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const { user } = await requireUser();
+  const { user, supabase } = await requireUser();
+  const { data: settings } = await supabase
+    .from("user_settings")
+    .select("username")
+    .eq("user_id", user.id)
+    .maybeSingle();
 
   return (
     <div className="brand-page min-h-screen">
@@ -26,7 +31,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             </nav>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-xs text-[#1f2933]/65">{user.email}</span>
+            <div className="text-right leading-tight">
+              <p className="text-xs font-semibold text-[#1F2933]">
+                {settings?.username || "User"}
+              </p>
+              <p className="text-xs text-[#1f2933]/65">{user.email}</p>
+            </div>
             <SignOutButton />
           </div>
         </div>

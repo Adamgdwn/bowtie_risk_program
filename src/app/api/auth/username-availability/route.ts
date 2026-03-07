@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 
@@ -24,12 +25,31 @@ export async function POST(request: Request) {
   }
 
   const username = candidateResult.data;
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("user_profiles")
-    .select("user_id")
-    .eq("username", username)
-    .maybeSingle();
+  let data: { user_id: string } | null = null;
+  let error: { message: string } | null = null;
+
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (serviceRoleKey && process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    const admin = createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const response = await admin
+      .from("user_settings")
+      .select("user_id")
+      .eq("username", username)
+      .maybeSingle();
+    data = response.data;
+    error = response.error ? { message: response.error.message } : null;
+  } else {
+    const supabase = await createClient();
+    const response = await supabase
+      .from("user_profiles")
+      .select("user_id")
+      .eq("username", username)
+      .maybeSingle();
+    data = response.data;
+    error = response.error ? { message: response.error.message } : null;
+  }
 
   if (error) {
     return NextResponse.json({ available: false, error: "Unable to check username." }, { status: 500 });
@@ -37,4 +57,3 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ available: !data, username });
 }
-
