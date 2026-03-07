@@ -8,7 +8,12 @@ export function AuthForm() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [mode, setMode] = useState<"login" | "signup">(() => {
+    if (typeof window === "undefined") return "login";
+    return new URLSearchParams(window.location.search).get("mode") === "signup"
+      ? "signup"
+      : "login";
+  });
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 

@@ -77,12 +77,20 @@ export default function Home() {
               Pricing
             </a>
           </nav>
-          <Link
-            href="/login"
-            className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-800 transition hover:border-cyan-500 hover:text-cyan-700"
-          >
-            Sign In
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/login"
+              className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-800 transition hover:border-cyan-500 hover:text-cyan-700"
+            >
+              Sign In
+            </Link>
+            <Link
+              href="/login?mode=signup"
+              className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-cyan-700"
+            >
+              Sign Up
+            </Link>
+          </div>
         </header>
 
         <main className="space-y-20 py-10">
@@ -100,10 +108,16 @@ export default function Home() {
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Link
-                  href="/login"
+                  href="/login?mode=signup"
                   className="rounded-xl bg-cyan-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-cyan-700"
                 >
                   Start Free Project
+                </Link>
+                <Link
+                  href="/login?mode=signup"
+                  className="rounded-xl border border-cyan-300 bg-cyan-50 px-5 py-3 text-sm font-semibold text-cyan-800 transition hover:border-cyan-500"
+                >
+                  Sign Up
                 </Link>
                 <Link
                   href="/login"
@@ -239,10 +253,16 @@ export default function Home() {
             <p className="text-sm font-semibold text-zinc-700">No credit card required to start.</p>
             <div className="flex flex-wrap gap-3">
               <Link
-                href="/login"
+                href="/login?mode=signup"
                 className="rounded-xl bg-cyan-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-cyan-700"
               >
                 Start Free Project
+              </Link>
+              <Link
+                href="/login?mode=signup"
+                className="rounded-xl border border-cyan-300 bg-cyan-50 px-5 py-3 text-sm font-semibold text-cyan-800 transition hover:border-cyan-500"
+              >
+                Sign Up
               </Link>
               <a
                 href="mailto:hello@bowtieriskbuilder.com"
