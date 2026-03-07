@@ -151,3 +151,7 @@ npm run dev
 2. Add subscription status sync from Stripe webhook to `user_settings.plan_tier`.
 3. Add role-based collaboration tables (`project_members`, invitations, permissions).
 4. Add optional version snapshots (`project_snapshots`) for rollback/history.
+
+## Testing Resources
+
+- Tester rollout package: `docs/TESTER_PACK.md`
