@@ -139,6 +139,18 @@ export function WorkflowWorksheet({
   const [syncMessage, setSyncMessage] = useState("Synced");
 
   useEffect(() => {
+    const normalizedIncoming = currentTopEvent ?? "";
+    if ((state.step1TopEvent ?? "") === normalizedIncoming) {
+      return;
+    }
+    setSyncMessage("Saving...");
+    setState((prev) => ({
+      ...prev,
+      step1TopEvent: normalizedIncoming,
+    }));
+  }, [currentTopEvent, state.step1TopEvent]);
+
+  useEffect(() => {
     const timeout = window.setTimeout(async () => {
       try {
         const response = await fetch(`/api/projects/${projectId}/workflow`, {
@@ -322,7 +334,7 @@ export function WorkflowWorksheet({
         <h2 className="text-lg font-semibold text-zinc-900">Bowtie Procedure Worksheet</h2>
         <p className="text-sm text-zinc-600">
           {projectMeta.title} | {projectMeta.industry} | Top Event:{" "}
-          {state.step1TopEvent?.trim() || currentTopEvent || projectMeta.topEvent}
+          {state.step1TopEvent?.trim() || "Not set"}
         </p>
         <p className="mt-2 text-sm text-zinc-700">
           Progress: <strong>{completionPercent}%</strong> ({Object.values(state.completed ?? {}).filter(Boolean).length}

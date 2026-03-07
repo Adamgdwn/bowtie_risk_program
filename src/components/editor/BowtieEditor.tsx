@@ -289,6 +289,7 @@ export function BowtieEditor({
   const [saving, setSaving] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
   const autosaveRef = useRef<number | undefined>(undefined);
+  const didHydrateTopEventRef = useRef(false);
   const isApplyingHistoryRef = useRef(false);
   const historyRef = useRef<{
     past: EditorSnapshot[];
@@ -315,8 +316,8 @@ export function BowtieEditor({
     [nodes, selectedId],
   );
   const worksheetTopEvent = useMemo(
-    () => nodes.find((node) => node.data.type === "top_event")?.data.title ?? projectMeta.topEvent,
-    [nodes, projectMeta.topEvent],
+    () => nodes.find((node) => node.data.type === "top_event")?.data.title ?? "",
+    [nodes],
   );
   const { indexByNodeId: mitigativeChainIndexByNodeId, maxDepth: mitigativeChainDepth } = useMemo(
     () => computeMitigativeChainIndexById(nodes, edges),
@@ -332,6 +333,21 @@ export function BowtieEditor({
   const onWorksheetTopEventChange = useCallback(
     (title: string) => {
       const normalized = title.trim();
+      if (!normalized) {
+        setNodes((existing) => existing.filter((node) => node.data.type !== "top_event"));
+        setEdges((existing) =>
+          existing.filter((edge) => {
+            const sourceNode = nodes.find((node) => node.id === edge.source);
+            const targetNode = nodes.find((node) => node.id === edge.target);
+            return sourceNode?.data.type !== "top_event" && targetNode?.data.type !== "top_event";
+          }),
+        );
+        setSelectedId((current) => {
+          const selectedNode = nodes.find((node) => node.id === current);
+          return selectedNode?.data.type === "top_event" ? null : current;
+        });
+        return;
+      }
       setNodes((existing) => {
         const topEventNodes = existing.filter((node) => node.data.type === "top_event");
         if (topEventNodes.length === 0) {
@@ -347,7 +363,7 @@ export function BowtieEditor({
               data: {
                 type: "top_event",
                 typeLabel: NODE_TYPE_META.top_event.label,
-                title: normalized || "Top Event",
+                title: normalized,
                 description: "",
               },
             },
@@ -355,12 +371,12 @@ export function BowtieEditor({
         }
         return existing.map((node) =>
           node.data.type === "top_event"
-            ? { ...node, data: { ...node.data, title: normalized || "Top Event" } }
+            ? { ...node, data: { ...node.data, title: normalized } }
             : node,
         );
       });
     },
-    [mitigativeColumns, setNodes],
+    [mitigativeColumns, nodes, setEdges, setNodes],
   );
   const initializeViewport = useCallback(
     (instance: ReactFlowInstance) => {
@@ -445,11 +461,13 @@ export function BowtieEditor({
   }, [nodes, edges]);
 
   useEffect(() => {
+    if (didHydrateTopEventRef.current) return;
+    didHydrateTopEventRef.current = true;
+
     const existingTopEvent = nodes.some((node) => node.data.type === "top_event");
     if (existingTopEvent) return;
 
-    const fromWorksheet = initialWorkflowState?.step1TopEvent?.trim();
-    const fallbackTitle = fromWorksheet || projectMeta.topEvent?.trim();
+    const fallbackTitle = initialWorkflowState?.step1TopEvent?.trim();
     if (!fallbackTitle) return;
 
     setNodes((existing) => {
@@ -474,7 +492,7 @@ export function BowtieEditor({
         },
       ];
     });
-  }, [initialWorkflowState?.step1TopEvent, mitigativeColumns, nodes, projectMeta.topEvent, setNodes]);
+  }, [initialWorkflowState?.step1TopEvent, mitigativeColumns, nodes, setNodes]);
 
   const onConnect = useCallback(
     (connection: Edge | Connection) => setEdges((existing) => addEdge({ ...connection, type: "smoothstep" }, existing)),
