@@ -17,6 +17,7 @@ import ReactFlow, {
 import "reactflow/dist/style.css";
 import { toPng } from "html-to-image";
 import { v4 as uuid } from "uuid";
+import { jsPDF } from "jspdf";
 import BowtieNode from "@/components/editor/BowtieNode";
 import { InspectorPanel } from "@/components/editor/InspectorPanel";
 import { WorkflowWorksheet } from "@/components/editor/WorkflowWorksheet";
@@ -40,6 +41,10 @@ interface ClipboardSnapshot {
   edges: Edge[];
 }
 
+type ExportFormat = "png" | "pdf";
+type ExportScope = "canvas" | "worksheet" | "both";
+type ExportSize = "small" | "medium" | "large";
+
 interface Props {
   projectId: string;
   projectMeta: {
@@ -60,6 +65,16 @@ const LANE_START_Y = -120;
 const LANE_HEIGHT = 2200;
 const DEFAULT_NODE_WIDTH = 208;
 const DEFAULT_VIEWPORT = { x: 0, y: 80, zoom: 0.72 };
+const EXPORT_PIXEL_RATIO: Record<ExportSize, number> = {
+  small: 1.4,
+  medium: 2,
+  large: 2.8,
+};
+const PDF_FORMAT_BY_SIZE: Record<ExportSize, "a4" | "a3" | "a2"> = {
+  small: "a4",
+  medium: "a3",
+  large: "a2",
+};
 
 const LANE_META: Array<{ label: string; className: string }> = [
   { label: "Threats", className: "border-r border-[#9CA3AF]/70 bg-[#f0f3f6]" },
@@ -286,6 +301,11 @@ export function BowtieEditor({
   const [worksheetGuidanceLoading, setWorksheetGuidanceLoading] = useState(false);
   const [worksheetGuidanceError, setWorksheetGuidanceError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [exportFormat, setExportFormat] = useState<ExportFormat>("png");
+  const [exportScope, setExportScope] = useState<ExportScope>("canvas");
+  const [exportSize, setExportSize] = useState<ExportSize>("medium");
+  const [exporting, setExporting] = useState(false);
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const autosaveRef = useRef<number | undefined>(undefined);
   const didHydrateTopEventRef = useRef(false);
@@ -1084,6 +1104,129 @@ export function BowtieEditor({
     [edges, hiddenNodeIds],
   );
 
+  function downloadDataUrl(dataUrl: string, filename: string) {
+    const a = document.createElement("a");
+    a.href = dataUrl;
+    a.download = filename;
+    a.click();
+  }
+
+  function waitForViewRender() {
+    return new Promise<void>((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          window.setTimeout(resolve, 90);
+        });
+      });
+    });
+  }
+
+  function getImageDimensions(dataUrl: string) {
+    return new Promise<{ width: number; height: number }>((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve({ width: image.width, height: image.height });
+      image.onerror = () => reject(new Error("Unable to read image dimensions."));
+      image.src = dataUrl;
+    });
+  }
+
+  function getExportBaseName() {
+    return projectMeta.title.replace(/\s+/g, "_").toLowerCase();
+  }
+
+  async function captureScopeViews(
+    scope: ExportScope,
+    size: ExportSize,
+  ): Promise<Array<{ mode: "canvas" | "worksheet"; dataUrl: string }>> {
+    const targets: Array<"canvas" | "worksheet"> =
+      scope === "both" ? ["canvas", "worksheet"] : [scope];
+    const originalMode = viewMode;
+    let currentMode = originalMode;
+    const captures: Array<{ mode: "canvas" | "worksheet"; dataUrl: string }> = [];
+
+    for (const target of targets) {
+      if (currentMode !== target) {
+        setViewMode(target);
+        currentMode = target;
+      }
+      await waitForViewRender();
+      if (!canvasRef.current) continue;
+      const dataUrl = await toPng(canvasRef.current, {
+        cacheBust: true,
+        pixelRatio: EXPORT_PIXEL_RATIO[size],
+      });
+      captures.push({ mode: target, dataUrl });
+    }
+
+    if (currentMode !== originalMode) {
+      setViewMode(originalMode);
+      await waitForViewRender();
+    }
+
+    return captures;
+  }
+
+  async function runExport() {
+    setExporting(true);
+    setExportMessage(null);
+    try {
+      const captures = await captureScopeViews(exportScope, exportSize);
+      if (captures.length === 0) {
+        setExportMessage("Nothing to export yet.");
+        return;
+      }
+
+      const baseName = getExportBaseName();
+      if (exportFormat === "png") {
+        if (captures.length === 1) {
+          downloadDataUrl(captures[0].dataUrl, `${baseName}_${captures[0].mode}.png`);
+        } else {
+          for (const capture of captures) {
+            downloadDataUrl(capture.dataUrl, `${baseName}_${capture.mode}.png`);
+          }
+        }
+        setExportMessage("PNG export complete.");
+        return;
+      }
+
+      const first = captures[0];
+      const firstDimensions = await getImageDimensions(first.dataUrl);
+      const firstOrientation = firstDimensions.width >= firstDimensions.height ? "landscape" : "portrait";
+      const doc = new jsPDF({
+        unit: "pt",
+        orientation: firstOrientation,
+        format: PDF_FORMAT_BY_SIZE[exportSize],
+      });
+      const pageFormat = PDF_FORMAT_BY_SIZE[exportSize];
+
+      captures.forEach((capture, index) => {
+        const imageProps = doc.getImageProperties(capture.dataUrl);
+        const orientation = imageProps.width > imageProps.height ? "landscape" : "portrait";
+        if (index > 0) {
+          doc.addPage(pageFormat, orientation);
+        }
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const margin = 24;
+        const maxWidth = pageWidth - margin * 2;
+        const maxHeight = pageHeight - margin * 2;
+        const ratio = Math.min(maxWidth / imageProps.width, maxHeight / imageProps.height);
+        const width = imageProps.width * ratio;
+        const height = imageProps.height * ratio;
+        const x = (pageWidth - width) / 2;
+        const y = (pageHeight - height) / 2;
+        doc.addImage(capture.dataUrl, "PNG", x, y, width, height);
+      });
+
+      doc.save(`${baseName}_${exportScope}.pdf`);
+      setExportMessage("PDF export complete.");
+    } catch {
+      setExportMessage("Export failed.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   function exportJson() {
     const blob = new Blob([JSON.stringify({ nodes, edges }, null, 2)], {
       type: "application/json",
@@ -1094,15 +1237,6 @@ export function BowtieEditor({
     a.download = `${projectMeta.title.replace(/\s+/g, "_").toLowerCase()}_bowtie.json`;
     a.click();
     URL.revokeObjectURL(url);
-  }
-
-  async function exportPng() {
-    if (!canvasRef.current) return;
-    const png = await toPng(canvasRef.current, { cacheBust: true, pixelRatio: 2 });
-    const a = document.createElement("a");
-    a.href = png;
-    a.download = `${projectMeta.title.replace(/\s+/g, "_").toLowerCase()}_bowtie.png`;
-    a.click();
   }
 
   function importJson(event: React.ChangeEvent<HTMLInputElement>) {
@@ -1185,9 +1319,47 @@ export function BowtieEditor({
           >
             Delete Selected
           </button>
-          <button onClick={exportPng} className="w-full rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs text-[#1F2933]">
-            Export PNG
-          </button>
+          <div className="rounded border border-[#9CA3AF] bg-white p-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-[#1F2933]/75">
+              Export Builder
+            </p>
+            <div className="mt-2 grid gap-1">
+              <select
+                value={exportFormat}
+                onChange={(event) => setExportFormat(event.target.value as ExportFormat)}
+                className="rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs text-[#1F2933]"
+              >
+                <option value="png">Format: PNG</option>
+                <option value="pdf">Format: PDF</option>
+              </select>
+              <select
+                value={exportScope}
+                onChange={(event) => setExportScope(event.target.value as ExportScope)}
+                className="rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs text-[#1F2933]"
+              >
+                <option value="canvas">Scope: Canvas</option>
+                <option value="worksheet">Scope: Worksheet</option>
+                <option value="both">Scope: Both</option>
+              </select>
+              <select
+                value={exportSize}
+                onChange={(event) => setExportSize(event.target.value as ExportSize)}
+                className="rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs text-[#1F2933]"
+              >
+                <option value="small">Size: Small</option>
+                <option value="medium">Size: Medium</option>
+                <option value="large">Size: Large</option>
+              </select>
+              <button
+                onClick={() => void runExport()}
+                disabled={exporting}
+                className="rounded border border-[#9CA3AF] bg-[#325D88] px-2 py-1 text-xs font-semibold text-white disabled:opacity-70"
+              >
+                {exporting ? "Exporting..." : "Run Export"}
+              </button>
+              {exportMessage ? <p className="text-[11px] text-[#1F2933]/70">{exportMessage}</p> : null}
+            </div>
+          </div>
           <button onClick={exportJson} className="w-full rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs text-[#1F2933]">
             Export JSON
           </button>

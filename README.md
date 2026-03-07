@@ -46,7 +46,14 @@ Next.js + TypeScript MVP for building Bowtie diagrams with guided structure, dra
   - AI action progress indicator ("AI is building suggestions") with bowtie-themed animation
   - autosave to Postgres via API
   - soft validation warnings
-  - PNG export + JSON import/export
+  - export builder for visual outputs:
+    - formats: PNG, PDF
+    - scopes: Canvas, Worksheet, Both
+    - size presets: Small, Medium, Large
+    - `Both` scope behavior:
+      - PNG: exports separate `..._canvas.png` and `..._worksheet.png`
+      - PDF: exports multi-page PDF (canvas + worksheet pages)
+  - JSON import/export
   - worksheet mode with structured 8-step bowtie procedure synced to Supabase
 - Settings page:
   - encrypted server-side API key storage
