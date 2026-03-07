@@ -119,6 +119,14 @@ function cloneSnapshot<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
+function stripPersistedUiState(data: BowtieNodeData): BowtieNodeData {
+  return {
+    ...data,
+    collapsedLeft: undefined,
+    collapsedRight: undefined,
+  };
+}
+
 function findNearestNodeByType(
   nodes: Node<BowtieNodeData>[],
   type: NodeType,
@@ -256,7 +264,12 @@ export function BowtieEditor({
   initialEdges,
   initialWorkflowState,
 }: Props) {
-  const [nodes, setNodes, rawOnNodesChange] = useNodesState(initialNodes);
+  const [nodes, setNodes, rawOnNodesChange] = useNodesState(
+    initialNodes.map((node) => ({
+      ...node,
+      data: stripPersistedUiState(node.data),
+    })),
+  );
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
@@ -280,9 +293,17 @@ export function BowtieEditor({
     future: EditorSnapshot[];
     lastHash: string;
   }>({
-    past: [cloneSnapshot({ nodes: initialNodes, edges: initialEdges })],
+    past: [
+      cloneSnapshot({
+        nodes: initialNodes.map((node) => ({ ...node, data: stripPersistedUiState(node.data) })),
+        edges: initialEdges,
+      }),
+    ],
     future: [],
-    lastHash: JSON.stringify({ nodes: initialNodes, edges: initialEdges }),
+    lastHash: JSON.stringify({
+      nodes: initialNodes.map((node) => ({ ...node, data: stripPersistedUiState(node.data) })),
+      edges: initialEdges,
+    }),
   });
   const clipboardRef = useRef<ClipboardSnapshot | null>(null);
   const pasteCountRef = useRef(0);
@@ -309,10 +330,14 @@ export function BowtieEditor({
 
   const saveCanvas = useCallback(async () => {
     setSaving(true);
+    const nodesForSave = nodes.map((node) => ({
+      ...node,
+      data: stripPersistedUiState(node.data),
+    }));
     await fetch(`/api/projects/${projectId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nodes, edges }),
+      body: JSON.stringify({ nodes: nodesForSave, edges }),
     });
     setSaving(false);
   }, [projectId, nodes, edges]);
@@ -848,6 +873,7 @@ export function BowtieEditor({
               : currentNode.position.x > rootX + 10;
 
           if (!isOnSide) continue;
+          if (currentNode.data.type === "top_event") continue;
           hidden.add(currentId);
 
           for (const next of neighbors.get(currentId) ?? []) {
