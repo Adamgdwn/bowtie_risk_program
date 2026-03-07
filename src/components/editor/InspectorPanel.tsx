@@ -140,11 +140,28 @@ export function InspectorPanel({
               className="rounded border border-zinc-300 bg-white px-2 py-1 text-xs"
               disabled={loading}
             >
-              {action}
+              {loading && lastAction === action ? "Thinking..." : action}
             </button>
           ))}
         </div>
       </div>
+
+      {loading ? (
+        <div className="mt-3 rounded border border-cyan-200 bg-cyan-50/70 p-3">
+          <div className="flex items-center gap-3">
+            <div className="relative h-8 w-16" aria-hidden>
+              <div className="absolute left-1 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full bg-red-400 animate-pulse" />
+              <div className="absolute right-1 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full bg-indigo-400 animate-pulse" />
+              <div className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-cyan-600 animate-ping" />
+              <div className="absolute left-3 right-3 top-1/2 h-px -translate-y-1/2 bg-cyan-400" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-cyan-900">AI is building suggestions</p>
+              <p className="text-[11px] text-cyan-800">Running: {lastAction}</p>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {hint ? <p className="mt-3 text-xs text-amber-700">{hint}</p> : null}
       {suggestions.length > 0 ? (
