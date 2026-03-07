@@ -40,8 +40,47 @@ export default async function DashboardPage() {
         </p>
       </section>
 
-      <div className="mt-4">
+      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
         <CreateProjectForm />
+        <aside className="brand-card h-fit rounded-2xl p-4 lg:sticky lg:top-24">
+          <h2 className="brand-heading text-sm font-semibold">Quickstart Guide</h2>
+          <p className="brand-text-muted mt-1 text-xs">
+            Set up a strong first bowtie and unlock AI guidance in under 5 minutes.
+          </p>
+
+          <div className="mt-3 space-y-3 text-xs text-[#1F2933]">
+            <div className="rounded-xl border border-[#9CA3AF] bg-white/80 p-3">
+              <p className="font-semibold">1. Create New Bowtie</p>
+              <ul className="brand-text-muted mt-1 list-disc space-y-1 pl-4">
+                <li>Enter a clear title and choose your industry.</li>
+                <li>Write one specific Top Event statement.</li>
+                <li>Optional: add context notes and choose a template.</li>
+                <li>Click <strong>Create Project</strong>.</li>
+              </ul>
+            </div>
+
+            <div className="rounded-xl border border-[#9CA3AF] bg-white/80 p-3">
+              <p className="font-semibold">2. Add Your API Key (BYOK)</p>
+              <ul className="brand-text-muted mt-1 list-disc space-y-1 pl-4">
+                <li>Get an API key from your LLM provider account.</li>
+                <li>
+                  Open <Link href="/settings" className="text-[#325D88] underline">Settings</Link> and paste it into{" "}
+                  <strong>AI Provider API Key (BYOK)</strong>.
+                </li>
+                <li>Select your BYOK provider and click <strong>Save Settings</strong>.</li>
+              </ul>
+            </div>
+
+            <div className="rounded-xl border border-[#9CA3AF] bg-white/80 p-3">
+              <p className="font-semibold">3. Build + Export</p>
+              <ul className="brand-text-muted mt-1 list-disc space-y-1 pl-4">
+                <li>Use + buttons to grow threats, barriers, and consequences.</li>
+                <li>Use AI actions in the Inspector to draft better controls.</li>
+                <li>Export Canvas, Worksheet, or Both as PNG/PDF.</li>
+              </ul>
+            </div>
+          </div>
+        </aside>
       </div>
 
       <section className="brand-card mt-4 rounded-2xl p-4">
