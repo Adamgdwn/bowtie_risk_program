@@ -12,10 +12,25 @@ Next.js + TypeScript MVP for building Bowtie diagrams with guided structure, dra
 - Dashboard for creating/listing/opening projects.
 - Project creation: `title + industry + top event + optional context`.
 - Visual editor (React Flow) with:
+  - 5-lane swimlane canvas (Threats, Preventive Barriers, Top Event, Mitigative Barriers, Consequences)
+  - lane-locked node positioning (vertical movement allowed; nodes stay centered in lane)
   - block palette
   - pan/zoom
   - snap-to-grid
   - connect edges
+  - context-aware quick-add (`+`) by node type
+  - chain insertion logic for barriers:
+    - `Threat -> Preventive Barrier -> Top Event`
+    - `Top Event -> Mitigative Barrier -> Consequence`
+  - escalation support flow:
+    - barrier `+` creates escalation factor in the correct support side context
+    - escalation factor `+` creates escalation factor control
+    - support links rendered with distinct dashed styling
+  - branch collapse/expand controls (mind-map style)
+  - keyboard shortcuts:
+    - `Ctrl/Cmd+C`, `Ctrl/Cmd+X`, `Ctrl/Cmd+V`
+    - `Ctrl/Cmd+Z`, `Ctrl/Cmd+Shift+Z`, `Ctrl/Cmd+Y`
+    - `Delete/Backspace` for selected nodes/edges
   - right inspector panel
   - autosave to Postgres via API
   - soft validation warnings

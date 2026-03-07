@@ -109,6 +109,18 @@ function cloneSnapshot<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
+function findNearestNodeByType(
+  nodes: Node<BowtieNodeData>[],
+  type: NodeType,
+  y: number,
+): Node<BowtieNodeData> | null {
+  const matches = nodes.filter((node) => node.data.type === type);
+  if (matches.length === 0) return null;
+  return matches.reduce((closest, candidate) =>
+    Math.abs(candidate.position.y - y) < Math.abs(closest.position.y - y) ? candidate : closest,
+  );
+}
+
 function quickAddOptionsFor(type: NodeType, side: "left" | "right"): QuickAddOption[] {
   if (type === "threat" && side === "right") {
     return [{ type: "preventive_barrier", label: "Preventive Barrier" }];
@@ -605,10 +617,37 @@ export function BowtieEditor({
       },
     };
 
-    const newEdge = getEdgeForPair(parent.data.type, childType, childId, parentId);
+    const nextEdges: Edge[] = [];
+    const edgesToRemove = new Set<string>();
+
+    if (childType === "mitigative_barrier" && parent.data.type === "consequence" && side === "left") {
+      const topEvent = findNearestNodeByType(nodes, "top_event", parent.position.y);
+      if (topEvent) {
+        nextEdges.push({ id: uuid(), source: topEvent.id, target: childId, type: "smoothstep" });
+        edges
+          .filter((edge) => edge.source === topEvent.id && edge.target === parent.id)
+          .forEach((edge) => edgesToRemove.add(edge.id));
+      }
+      nextEdges.push({ id: uuid(), source: childId, target: parent.id, type: "smoothstep" });
+    } else if (childType === "preventive_barrier" && parent.data.type === "threat" && side === "right") {
+      const topEvent = findNearestNodeByType(nodes, "top_event", parent.position.y);
+      nextEdges.push({ id: uuid(), source: parent.id, target: childId, type: "smoothstep" });
+      if (topEvent) {
+        nextEdges.push({ id: uuid(), source: childId, target: topEvent.id, type: "smoothstep" });
+        edges
+          .filter((edge) => edge.source === parent.id && edge.target === topEvent.id)
+          .forEach((edge) => edgesToRemove.add(edge.id));
+      }
+    } else {
+      nextEdges.push(getEdgeForPair(parent.data.type, childType, childId, parentId));
+    }
+
     setNodes((existing) => [...existing, newNode]);
-    setEdges((existing) => [...existing, newEdge]);
-  }, [nodes, setEdges, setNodes]);
+    setEdges((existing) => {
+      const kept = edgesToRemove.size > 0 ? existing.filter((edge) => !edgesToRemove.has(edge.id)) : existing;
+      return [...kept, ...nextEdges];
+    });
+  }, [edges, nodes, setEdges, setNodes]);
 
   const toggleCollapse = useCallback((nodeId: string, side: "left" | "right") => {
     setNodes((existing) =>
