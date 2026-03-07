@@ -48,10 +48,22 @@ create table if not exists public.user_settings (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.user_profiles (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  username text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint user_profiles_username_format check (username ~ '^[a-z0-9_]{3,24}$'),
+  constraint user_profiles_username_lowercase check (username = lower(username))
+);
+
+create unique index if not exists user_profiles_username_unique on public.user_profiles (username);
+
 alter table public.projects enable row level security;
 alter table public.nodes enable row level security;
 alter table public.edges enable row level security;
 alter table public.user_settings enable row level security;
+alter table public.user_profiles enable row level security;
 
 create policy "projects_select_own" on public.projects
 for select using (auth.uid() = owner_id);
@@ -120,3 +132,57 @@ create policy "user_settings_update_own" on public.user_settings
 for update using (auth.uid() = user_id);
 create policy "user_settings_delete_own" on public.user_settings
 for delete using (auth.uid() = user_id);
+
+create policy "user_profiles_select_own" on public.user_profiles
+for select using (auth.uid() = user_id);
+create policy "user_profiles_insert_own" on public.user_profiles
+for insert with check (auth.uid() = user_id);
+create policy "user_profiles_update_own" on public.user_profiles
+for update using (auth.uid() = user_id);
+create policy "user_profiles_delete_own" on public.user_profiles
+for delete using (auth.uid() = user_id);
+create policy "user_profiles_username_lookup" on public.user_profiles
+for select using (true);
+
+create or replace function public.handle_auth_user_created()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_username text;
+begin
+  v_username := lower(coalesce(new.raw_user_meta_data ->> 'username', ''));
+  if v_username = '' then
+    raise exception 'Username is required';
+  end if;
+
+  insert into public.user_profiles (user_id, username)
+  values (new.id, v_username);
+
+  insert into public.user_settings (user_id)
+  values (new.id)
+  on conflict (user_id) do nothing;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+after insert on auth.users
+for each row execute procedure public.handle_auth_user_created();
+
+drop view if exists public.account_directory;
+create view public.account_directory as
+select
+  p.user_id,
+  u.email,
+  p.username,
+  s.plan_tier,
+  p.created_at as profile_created_at
+from public.user_profiles p
+join auth.users u on u.id = p.user_id
+left join public.user_settings s on s.user_id = p.user_id
+order by p.created_at desc;

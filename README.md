@@ -5,6 +5,7 @@ Next.js + TypeScript MVP for building Bowtie diagrams with guided structure, dra
 ## Implemented
 
 - Supabase email/password auth with signup verification messaging.
+- Signup username requirement with availability check and unique enforcement.
 - Three-tier account model support in settings and project limits:
   - `free`: 2 projects, BYOK
   - `pro`: unlimited, BYOK
@@ -65,6 +66,8 @@ Next.js + TypeScript MVP for building Bowtie diagrams with guided structure, dra
   - `nodes`
   - `edges`
   - `user_settings`
+  - `user_profiles`
+  - `account_directory` view (`email + username + plan_tier`)
 
 ## Branding System
 
