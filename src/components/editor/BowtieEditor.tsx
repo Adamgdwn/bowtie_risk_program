@@ -351,6 +351,12 @@ export function BowtieEditor({
       setNodes((existing) => {
         const topEventNodes = existing.filter((node) => node.data.type === "top_event");
         if (topEventNodes.length === 0) {
+          const referenceNodes = existing.filter((node) => node.data.type !== "top_event");
+          const avgY =
+            referenceNodes.length > 0
+              ? referenceNodes.reduce((sum, node) => sum + node.position.y, 0) / referenceNodes.length
+              : 360;
+          const clampedY = Math.max(160, Math.min(avgY, 1400));
           return [
             ...existing,
             {
@@ -358,7 +364,7 @@ export function BowtieEditor({
               type: "bowtieNode",
               position: {
                 x: laneXForNode("top_event", {}, mitigativeColumns),
-                y: 260,
+                y: clampedY,
               },
               data: {
                 type: "top_event",
@@ -378,6 +384,25 @@ export function BowtieEditor({
     },
     [mitigativeColumns, nodes, setEdges, setNodes],
   );
+  useEffect(() => {
+    setNodes((existing) => {
+      let changed = false;
+      const targetX = laneXForNode("top_event", {}, mitigativeColumns);
+      const next = existing.map((node) => {
+        if (node.data.type !== "top_event") return node;
+        if (Math.abs(node.position.x - targetX) < 0.5) return node;
+        changed = true;
+        return {
+          ...node,
+          position: {
+            ...node.position,
+            x: targetX,
+          },
+        };
+      });
+      return changed ? next : existing;
+    });
+  }, [mitigativeColumns, setNodes]);
   const initializeViewport = useCallback(
     (instance: ReactFlowInstance) => {
       if (didInitViewport) return;
