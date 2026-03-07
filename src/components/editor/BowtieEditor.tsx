@@ -1173,7 +1173,7 @@ export function BowtieEditor({
       <div className="relative flex-1" ref={canvasRef}>
         {viewMode === "canvas" ? (
           <>
-            <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden">
+            <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
               <div
                 className="absolute"
                 style={{
@@ -1208,6 +1208,7 @@ export function BowtieEditor({
               </div>
             </div>
             <ReactFlow
+              className="relative z-10"
               nodes={viewNodes}
               edges={viewEdges}
               nodeTypes={nodeTypes}
