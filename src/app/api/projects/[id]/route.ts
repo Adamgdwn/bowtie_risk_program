@@ -122,6 +122,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     data: edge.data ?? {},
   }));
 
+  const latestTopEvent =
+    parsed.data.nodes.find((node) => node.data?.type === "top_event")?.data?.title?.trim() ?? "";
+
   const { error: deleteNodesError } = await supabase.from("nodes").delete().eq("project_id", id);
   if (deleteNodesError) {
     return NextResponse.json({ error: deleteNodesError.message }, { status: 500 });
@@ -146,7 +149,13 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     }
   }
 
-  await supabase.from("projects").update({ updated_at: new Date().toISOString() }).eq("id", id);
+  await supabase
+    .from("projects")
+    .update({
+      top_event: latestTopEvent,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
 
   return NextResponse.json({ ok: true });
 }
