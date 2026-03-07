@@ -10,6 +10,14 @@ Next.js + TypeScript MVP for building Bowtie diagrams with guided structure, dra
   - `pro`: unlimited, BYOK
   - `team`: unlimited, managed model placeholder
 - Dashboard for creating/listing/opening projects.
+- Public SaaS-style landing page (`/`) with:
+  - hero + primary/secondary CTAs
+  - problem/solution section
+  - workflow steps
+  - feature grid
+  - trust/proof section
+  - pricing + footer
+  - explicit `Sign In` + `Sign Up` paths
 - Project creation: `title + industry + top event + optional context`.
 - Visual editor (React Flow) with:
   - 5-lane swimlane canvas (Threats, Preventive Barriers, Top Event, Mitigative Barriers, Consequences)
@@ -35,6 +43,7 @@ Next.js + TypeScript MVP for building Bowtie diagrams with guided structure, dra
     - `Ctrl/Cmd+Z`, `Ctrl/Cmd+Shift+Z`, `Ctrl/Cmd+Y`
     - `Delete/Backspace` for selected nodes/edges
   - right inspector panel
+  - AI action progress indicator ("AI is building suggestions") with bowtie-themed animation
   - autosave to Postgres via API
   - soft validation warnings
   - PNG export + JSON import/export
@@ -49,6 +58,51 @@ Next.js + TypeScript MVP for building Bowtie diagrams with guided structure, dra
   - `nodes`
   - `edges`
   - `user_settings`
+
+## Branding System
+
+The app now uses a shared brand palette with CSS variables and reusable utility classes in `src/app/globals.css`.
+
+### Palette
+
+- Primary brand / main CTAs: `#325D88` (Slate blue)
+- Header/nav/key text accents: `#1F2933` (Charcoal)
+- Highlight/accent: `#D4A547` (Soft gold)
+- Background base: `#F5F3F0` (Warm light grey)
+- Panels/cards: `#E5E7EB` (Neutral light)
+- Borders/UI chrome: `#9CA3AF` (Medium grey)
+- Positive/status: `#4CAF50` (Soft green)
+- Destructive/high risk: `#C7514A` (Muted red)
+
+### Reusable classes
+
+- `brand-page`: base app/marketing background + foreground
+- `brand-card`: white surface + branded border
+- `brand-panel`: neutral-light panel surface
+- `brand-heading`: charcoal heading color
+- `brand-text-muted`: muted body/supporting text
+- `brand-btn-primary`: slate-blue primary CTA
+- `brand-btn-secondary`: neutral secondary action
+- `brand-accent-chip`: soft-gold accent badge/chip
+
+### Usage guidance
+
+- Use `brand-btn-primary` for primary conversion actions (Start Free Project, Sign Up, Subscribe).
+- Use `brand-btn-secondary` for secondary actions (Sign In, View Example, Book Walkthrough).
+- Use `brand-accent-chip` sparingly for key callouts only.
+- Keep content surfaces on warm/neutral backgrounds to preserve scanability in worksheet and editor views.
+- Preserve semantic bowtie node type colors for diagram readability (brand palette should not override hazard/control meaning).
+
+## Auth Entry Paths
+
+- `GET /login`: default login mode
+- `GET /login?mode=signup`: opens auth form pre-set to signup mode
+
+Landing CTAs now route users intentionally by intent:
+
+- `Start Free Project` -> `/login?mode=signup`
+- `Sign Up` -> `/login?mode=signup`
+- `Sign In` -> `/login`
 
 ## Placeholder Areas (by design)
 

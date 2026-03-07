@@ -1,8 +1,17 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f4f5f7;
-  --foreground: #111827;
+  --background: #f5f3f0;
+  --foreground: #1f2933;
+  --brand-primary: #325d88;
+  --brand-primary-hover: #3e6e9d;
+  --brand-heading: #1f2933;
+  --brand-accent: #d4a547;
+  --panel: #e5e7eb;
+  --chrome: #9ca3af;
+  --status-positive: #4caf50;
+  --status-danger: #c7514a;
+  --surface: #ffffff;
 }
 
 @theme inline {
@@ -16,4 +25,55 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), sans-serif;
+}
+
+.brand-page {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.brand-card {
+  background: var(--surface);
+  border: 1px solid var(--chrome);
+}
+
+.brand-panel {
+  background: var(--panel);
+  border: 1px solid var(--chrome);
+}
+
+.brand-heading {
+  color: var(--brand-heading);
+}
+
+.brand-text-muted {
+  color: color-mix(in srgb, var(--brand-heading) 70%, white);
+}
+
+.brand-btn-primary {
+  background: var(--brand-primary);
+  color: #fff;
+  border: 1px solid var(--brand-primary);
+}
+
+.brand-btn-primary:hover {
+  background: var(--brand-primary-hover);
+  border-color: var(--brand-primary-hover);
+}
+
+.brand-btn-secondary {
+  background: var(--surface);
+  color: var(--brand-heading);
+  border: 1px solid var(--chrome);
+}
+
+.brand-btn-secondary:hover {
+  border-color: var(--brand-primary);
+  color: var(--brand-primary);
+}
+
+.brand-accent-chip {
+  background: color-mix(in srgb, var(--brand-accent) 16%, white);
+  border: 1px solid color-mix(in srgb, var(--brand-accent) 45%, white);
+  color: color-mix(in srgb, var(--brand-heading) 85%, black);
 }

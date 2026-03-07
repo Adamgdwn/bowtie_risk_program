@@ -61,11 +61,11 @@ const LANE_HEIGHT = 2200;
 const DEFAULT_NODE_WIDTH = 208;
 
 const LANE_META: Array<{ label: string; className: string }> = [
-  { label: "Threats", className: "border-r border-cyan-200/70 bg-cyan-100/30" },
-  { label: "Preventive Barriers", className: "border-r border-amber-200/70 bg-amber-100/25" },
-  { label: "Top Event", className: "border-r border-orange-200/70 bg-orange-100/25" },
-  { label: "Mitigative Barriers", className: "border-r border-sky-200/70 bg-sky-100/25" },
-  { label: "Consequences", className: "bg-indigo-100/25" },
+  { label: "Threats", className: "border-r border-[#9CA3AF]/70 bg-[#f0f3f6]" },
+  { label: "Preventive Barriers", className: "border-r border-[#D4A547]/40 bg-[#fcf7ea]" },
+  { label: "Top Event", className: "border-r border-[#9CA3AF]/70 bg-[#f6f4ef]" },
+  { label: "Mitigative Barriers", className: "border-r border-[#325D88]/35 bg-[#eef3f8]" },
+  { label: "Consequences", className: "bg-[#f1f4f8]" },
 ];
 
 function laneXForType(type: NodeType, mitigativeColumns = 1) {
@@ -956,12 +956,12 @@ export function BowtieEditor({
 
   return (
     <div className="flex h-[calc(100vh-4rem)] w-full">
-      <div className="w-64 border-r border-zinc-200 bg-zinc-50 p-3">
-        <div className="mb-3 grid grid-cols-2 gap-1 rounded border border-zinc-300 bg-white p-1">
+      <div className="w-64 border-r border-[#9CA3AF] bg-[#E5E7EB] p-3">
+        <div className="mb-3 grid grid-cols-2 gap-1 rounded border border-[#9CA3AF] bg-white p-1">
           <button
             onClick={() => setViewMode("canvas")}
             className={`rounded px-2 py-1 text-xs font-semibold ${
-              viewMode === "canvas" ? "bg-zinc-900 text-white" : "text-zinc-700"
+              viewMode === "canvas" ? "bg-[#325D88] text-white" : "text-[#1F2933]"
             }`}
           >
             Canvas
@@ -969,36 +969,36 @@ export function BowtieEditor({
           <button
             onClick={() => setViewMode("worksheet")}
             className={`rounded px-2 py-1 text-xs font-semibold ${
-              viewMode === "worksheet" ? "bg-zinc-900 text-white" : "text-zinc-700"
+              viewMode === "worksheet" ? "bg-[#325D88] text-white" : "text-[#1F2933]"
             }`}
           >
             Worksheet
           </button>
         </div>
 
-        <h3 className="text-sm font-semibold text-zinc-900">Palette</h3>
+        <h3 className="text-sm font-semibold text-[#1F2933]">Palette</h3>
         <div className="mt-2 grid gap-2">
           {Object.entries(NODE_TYPE_META).map(([type, meta]) => (
             <button
               key={type}
               onClick={() => addNode(type as keyof typeof NODE_TYPE_META)}
-              className="rounded border border-zinc-300 bg-white px-2 py-1 text-left text-xs"
+              className="rounded border border-[#9CA3AF] bg-white px-2 py-1 text-left text-xs text-[#1F2933]"
             >
               + {meta.label}
             </button>
           ))}
         </div>
 
-        <h4 className="mt-4 text-xs font-semibold uppercase text-zinc-600">Quick Add</h4>
+        <h4 className="mt-4 text-xs font-semibold uppercase text-[#1F2933]/70">Quick Add</h4>
         <div className="mt-1 space-y-1">
-          <button className="w-full rounded bg-red-100 px-2 py-1 text-xs" onClick={() => addNode("threat")}>
+          <button className="w-full rounded bg-[#f6dfdd] px-2 py-1 text-xs text-[#1F2933]" onClick={() => addNode("threat")}>
             + Threat
           </button>
-          <button className="w-full rounded bg-indigo-100 px-2 py-1 text-xs" onClick={() => addNode("consequence")}>
+          <button className="w-full rounded bg-[#dce6f1] px-2 py-1 text-xs text-[#1F2933]" onClick={() => addNode("consequence")}>
             + Consequence
           </button>
           <button
-            className="w-full rounded bg-amber-100 px-2 py-1 text-xs"
+            className="w-full rounded bg-[#f4e7ca] px-2 py-1 text-xs text-[#1F2933]"
             onClick={() => addNode("preventive_barrier")}
           >
             + Barrier
@@ -1006,30 +1006,30 @@ export function BowtieEditor({
         </div>
 
         <div className="mt-4 space-y-2">
-          <button onClick={saveCanvas} className="w-full rounded bg-zinc-900 px-2 py-1 text-xs text-white">
+          <button onClick={saveCanvas} className="w-full rounded bg-[#325D88] px-2 py-1 text-xs text-white">
             {saving ? "Saving..." : "Save Now"}
           </button>
           <button
             onClick={deleteSelected}
             disabled={selectedNodeIds.length === 0 && selectedEdgeIds.length === 0}
-            className="w-full rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700 disabled:opacity-50"
+            className="w-full rounded border border-[#C7514A] bg-[#f9eceb] px-2 py-1 text-xs text-[#C7514A] disabled:opacity-50"
           >
             Delete Selected
           </button>
-          <button onClick={exportPng} className="w-full rounded border border-zinc-300 px-2 py-1 text-xs">
+          <button onClick={exportPng} className="w-full rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs text-[#1F2933]">
             Export PNG
           </button>
-          <button onClick={exportJson} className="w-full rounded border border-zinc-300 px-2 py-1 text-xs">
+          <button onClick={exportJson} className="w-full rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs text-[#1F2933]">
             Export JSON
           </button>
-          <label className="block cursor-pointer rounded border border-zinc-300 px-2 py-1 text-center text-xs">
+          <label className="block cursor-pointer rounded border border-[#9CA3AF] bg-white px-2 py-1 text-center text-xs text-[#1F2933]">
             Import JSON
             <input type="file" accept="application/json" onChange={importJson} className="hidden" />
           </label>
         </div>
 
         {warnings.length > 0 ? (
-          <div className="mt-4 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+          <div className="mt-4 rounded border border-[#D4A547] bg-[#f8f1df] p-2 text-xs text-[#1F2933]">
             <p className="font-semibold">Soft warnings</p>
             <ul className="mt-1 list-disc pl-4">
               {warnings.map((warning) => (
@@ -1068,7 +1068,7 @@ export function BowtieEditor({
                   {LANE_META.map((lane, index) => (
                     <div
                       key={`${lane.label}-label`}
-                      className="flex items-center justify-center px-2 text-center text-[11px] font-semibold uppercase tracking-wider text-zinc-700"
+                      className="flex items-center justify-center px-2 text-center text-[11px] font-semibold uppercase tracking-wider text-[#1F2933]"
                       style={{ width: laneWidths[index] }}
                     >
                       {lane.label}
@@ -1126,42 +1126,42 @@ export function BowtieEditor({
           onInsertSuggestions={onInsertSuggestions}
         />
       ) : (
-        <aside className="w-80 border-l border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-700">
-          <h3 className="font-semibold text-zinc-900">Worksheet Guidance</h3>
-          <p className="mt-1 text-xs font-semibold text-zinc-700">{worksheetStepTitle}</p>
+        <aside className="w-80 border-l border-[#9CA3AF] bg-[#E5E7EB] p-4 text-sm text-[#1F2933]">
+          <h3 className="font-semibold text-[#1F2933]">Worksheet Guidance</h3>
+          <p className="mt-1 text-xs font-semibold text-[#1F2933]">{worksheetStepTitle}</p>
           {worksheetGuidanceLoading ? (
-            <p className="mt-3 text-xs text-zinc-600">Generating LLM facilitation prompts...</p>
+            <p className="mt-3 text-xs text-[#1F2933]/70">Generating LLM facilitation prompts...</p>
           ) : null}
           {worksheetGuidanceError ? (
-            <p className="mt-3 text-xs text-red-700">{worksheetGuidanceError}</p>
+            <p className="mt-3 text-xs text-[#C7514A]">{worksheetGuidanceError}</p>
           ) : null}
           {worksheetGuidance ? (
             <div className="mt-3 space-y-3">
-              <div className="rounded border border-zinc-200 bg-white p-2">
-                <p className="text-xs font-semibold text-zinc-900">{worksheetGuidance.headline}</p>
-                <p className="mt-1 text-[11px] text-zinc-500">
+              <div className="rounded border border-[#9CA3AF] bg-white p-2">
+                <p className="text-xs font-semibold text-[#1F2933]">{worksheetGuidance.headline}</p>
+                <p className="mt-1 text-[11px] text-[#1F2933]/65">
                   Source: {worksheetGuidance.source.toUpperCase()}
                 </p>
               </div>
               <div>
-                <p className="text-xs font-semibold text-zinc-800">Discussion Prompts</p>
-                <ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-zinc-700">
+                <p className="text-xs font-semibold text-[#1F2933]">Discussion Prompts</p>
+                <ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-[#1F2933]">
                   {worksheetGuidance.discussionPrompts.map((item) => (
                     <li key={item}>{item}</li>
                   ))}
                 </ul>
               </div>
               <div>
-                <p className="text-xs font-semibold text-zinc-800">Quality Checks</p>
-                <ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-zinc-700">
+                <p className="text-xs font-semibold text-[#1F2933]">Quality Checks</p>
+                <ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-[#1F2933]">
                   {worksheetGuidance.qualityChecks.map((item) => (
                     <li key={item}>{item}</li>
                   ))}
                 </ul>
               </div>
               <div>
-                <p className="text-xs font-semibold text-zinc-800">Suggested Next Actions</p>
-                <ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-zinc-700">
+                <p className="text-xs font-semibold text-[#1F2933]">Suggested Next Actions</p>
+                <ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-[#1F2933]">
                   {worksheetGuidance.nextActions.map((item) => (
                     <li key={item}>{item}</li>
                   ))}
@@ -1169,7 +1169,7 @@ export function BowtieEditor({
               </div>
             </div>
           ) : (
-            <p className="mt-3 text-xs text-zinc-600">
+            <p className="mt-3 text-xs text-[#1F2933]/70">
               Click into a step&apos;s notes box to generate interactive LLM workshop guidance.
             </p>
           )}

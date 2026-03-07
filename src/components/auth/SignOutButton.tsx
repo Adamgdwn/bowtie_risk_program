@@ -14,7 +14,7 @@ export function SignOutButton() {
   }
 
   return (
-    <button className="rounded border border-zinc-300 px-3 py-1 text-sm" onClick={signOut}>
+    <button className="brand-btn-secondary rounded px-3 py-1 text-sm" onClick={signOut}>
       Sign out
     </button>
   );

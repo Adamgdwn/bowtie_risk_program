@@ -36,7 +36,7 @@ export default async function SettingsPage() {
 
   return (
     <main className="mx-auto max-w-7xl p-4">
-      <h1 className="mb-3 text-xl font-semibold text-zinc-900">Settings</h1>
+      <h1 className="brand-heading mb-3 text-xl font-semibold">Settings</h1>
       <SettingsForm
         initialSettings={{
           plan_tier: data?.plan_tier ?? "free",
