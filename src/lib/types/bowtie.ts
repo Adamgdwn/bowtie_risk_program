@@ -25,6 +25,8 @@ export interface BowtieNodeData {
   title: string;
   description?: string;
   supportLane?: "preventive" | "mitigative";
+  chainIndex?: number;
+  supportAnchorX?: number;
   collapsedLeft?: boolean;
   collapsedRight?: boolean;
   tags?: string[];

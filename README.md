@@ -22,6 +22,9 @@ Next.js + TypeScript MVP for building Bowtie diagrams with guided structure, dra
   - chain insertion logic for barriers:
     - `Threat -> Preventive Barrier -> Top Event`
     - `Top Event -> Mitigative Barrier -> Consequence`
+    - repeated `Consequence + (left)` appends a serialized mitigative chain:
+      - `Top Event -> MB1 -> MB2 -> ... -> Consequence`
+    - mitigative swimlane expands horizontally to keep the chain in one line
   - escalation support flow:
     - barrier `+` creates escalation factor in the correct support side context
     - escalation factor `+` creates escalation factor control

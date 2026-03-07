@@ -55,7 +55,6 @@ interface Props {
 
 const nodeTypes = { bowtieNode: BowtieNode };
 const LANE_WIDTH = 250;
-const LANE_COUNT = 5;
 const LANE_START_X = 0;
 const LANE_START_Y = -120;
 const LANE_HEIGHT = 2200;
@@ -69,7 +68,7 @@ const LANE_META: Array<{ label: string; className: string }> = [
   { label: "Consequences", className: "bg-indigo-100/25" },
 ];
 
-function laneXForType(type: NodeType) {
+function laneXForType(type: NodeType, mitigativeColumns = 1) {
   const lane = NODE_TYPE_META[type].lane;
   const laneIndex =
     lane === "left"
@@ -80,29 +79,40 @@ function laneXForType(type: NodeType) {
           ? 2
           : lane === "center-right"
             ? 3
-            : 4;
+            : 4 + (mitigativeColumns - 1);
   return LANE_START_X + laneIndex * LANE_WIDTH + (LANE_WIDTH - DEFAULT_NODE_WIDTH) / 2;
 }
 
-function supportLaneForNode(node: Node<BowtieNodeData> | null | undefined): "preventive" | "mitigative" {
+function supportLaneForNode(
+  node: Node<BowtieNodeData> | null | undefined,
+  mitigativeColumns = 1,
+): "preventive" | "mitigative" {
   if (!node) return "preventive";
   if (node.data.type === "mitigative_barrier") return "mitigative";
   if (node.data.type === "preventive_barrier") return "preventive";
   if (node.data.supportLane) return node.data.supportLane;
   if (node.data.type === "escalation_factor" || node.data.type === "escalation_factor_control") {
     const laneThreeX = LANE_START_X + 3 * LANE_WIDTH;
-    return node.position.x >= laneThreeX ? "mitigative" : "preventive";
+    const mitigativeEdgeX = laneThreeX + mitigativeColumns * LANE_WIDTH;
+    return node.position.x >= laneThreeX && node.position.x < mitigativeEdgeX ? "mitigative" : "preventive";
   }
   return "preventive";
 }
 
-function laneXForNode(type: NodeType, data?: Partial<BowtieNodeData>) {
+function laneXForNode(type: NodeType, data?: Partial<BowtieNodeData>, mitigativeColumns = 1) {
   if (type === "escalation_factor" || type === "escalation_factor_control") {
+    if (typeof data?.supportAnchorX === "number") {
+      return data.supportAnchorX;
+    }
     const supportLane = data?.supportLane ?? "preventive";
     const laneIndex = supportLane === "mitigative" ? 3 : 1;
     return LANE_START_X + laneIndex * LANE_WIDTH + (LANE_WIDTH - DEFAULT_NODE_WIDTH) / 2;
   }
-  return laneXForType(type);
+  if (type === "mitigative_barrier" && typeof data?.chainIndex === "number") {
+    const clampedIndex = Math.max(0, Math.min(data.chainIndex, mitigativeColumns - 1));
+    return LANE_START_X + (3 + clampedIndex) * LANE_WIDTH + (LANE_WIDTH - DEFAULT_NODE_WIDTH) / 2;
+  }
+  return laneXForType(type, mitigativeColumns);
 }
 
 function cloneSnapshot<T>(value: T): T {
@@ -119,6 +129,56 @@ function findNearestNodeByType(
   return matches.reduce((closest, candidate) =>
     Math.abs(candidate.position.y - y) < Math.abs(closest.position.y - y) ? candidate : closest,
   );
+}
+
+function getMitigativeChainForConsequence(
+  nodes: Node<BowtieNodeData>[],
+  edges: Edge[],
+  consequenceId: string,
+): string[] {
+  const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+  const incoming = new Map<string, Edge[]>();
+  for (const edge of edges) {
+    const list = incoming.get(edge.target) ?? [];
+    list.push(edge);
+    incoming.set(edge.target, list);
+  }
+
+  const chainFromConsequence: string[] = [];
+  let cursor = consequenceId;
+  const visited = new Set<string>();
+  while (true) {
+    const nextEdge = (incoming.get(cursor) ?? []).find((edge) => {
+      const sourceNode = nodeMap.get(edge.source);
+      return sourceNode?.data.type === "mitigative_barrier";
+    });
+    if (!nextEdge) break;
+    if (visited.has(nextEdge.source)) break;
+    visited.add(nextEdge.source);
+    chainFromConsequence.push(nextEdge.source);
+    cursor = nextEdge.source;
+  }
+
+  return chainFromConsequence.reverse();
+}
+
+function computeMitigativeChainIndexById(
+  nodes: Node<BowtieNodeData>[],
+  edges: Edge[],
+): { indexByNodeId: Record<string, number>; maxDepth: number } {
+  const indexByNodeId: Record<string, number> = {};
+  let maxDepth = 1;
+  const consequences = nodes.filter((node) => node.data.type === "consequence");
+  for (const consequence of consequences) {
+    const chain = getMitigativeChainForConsequence(nodes, edges, consequence.id);
+    if (chain.length > maxDepth) {
+      maxDepth = chain.length;
+    }
+    chain.forEach((nodeId, index) => {
+      indexByNodeId[nodeId] = index;
+    });
+  }
+  return { indexByNodeId, maxDepth };
 }
 
 function quickAddOptionsFor(type: NodeType, side: "left" | "right"): QuickAddOption[] {
@@ -231,6 +291,16 @@ export function BowtieEditor({
     () => nodes.find((node) => node.id === selectedId) ?? null,
     [nodes, selectedId],
   );
+  const { indexByNodeId: mitigativeChainIndexByNodeId, maxDepth: mitigativeChainDepth } = useMemo(
+    () => computeMitigativeChainIndexById(nodes, edges),
+    [nodes, edges],
+  );
+  const mitigativeColumns = Math.max(1, mitigativeChainDepth);
+  const laneWidths = useMemo(
+    () => [LANE_WIDTH, LANE_WIDTH, LANE_WIDTH, LANE_WIDTH * mitigativeColumns, LANE_WIDTH],
+    [mitigativeColumns],
+  );
+  const totalLaneWidth = useMemo(() => laneWidths.reduce((sum, width) => sum + width, 0), [laneWidths]);
 
   const warnings = useMemo(
     () => validateBowtie(nodes, edges).map((item) => item.message),
@@ -295,14 +365,24 @@ export function BowtieEditor({
         return {
           ...change,
           position: {
-            x: laneXForNode(currentNode.data.type, currentNode.data),
+            x: laneXForNode(
+              currentNode.data.type,
+              {
+                ...currentNode.data,
+                chainIndex:
+                  currentNode.data.type === "mitigative_barrier"
+                    ? (mitigativeChainIndexByNodeId[currentNode.id] ?? currentNode.data.chainIndex)
+                    : currentNode.data.chainIndex,
+              },
+              mitigativeColumns,
+            ),
             y: change.position.y,
           },
         };
       });
       rawOnNodesChange(locked);
     },
-    [nodes, rawOnNodesChange],
+    [mitigativeChainIndexByNodeId, mitigativeColumns, nodes, rawOnNodesChange],
   );
 
   const onSelectionChange = useCallback((params: OnSelectionChangeParams) => {
@@ -312,6 +392,37 @@ export function BowtieEditor({
     setSelectedEdgeIds(edgeIds);
     setSelectedId(nodeIds[0] ?? null);
   }, []);
+
+  useEffect(() => {
+    setNodes((existing) => {
+      let changed = false;
+      const next = existing.map((node) => {
+        const chainIndex =
+          node.data.type === "mitigative_barrier"
+            ? (mitigativeChainIndexByNodeId[node.id] ?? node.data.chainIndex)
+            : node.data.chainIndex;
+        const supportLane =
+          node.data.type === "escalation_factor" || node.data.type === "escalation_factor_control"
+            ? supportLaneForNode(node, mitigativeColumns)
+            : node.data.supportLane;
+        const x = laneXForNode(
+          node.data.type,
+          { ...node.data, chainIndex, supportLane },
+          mitigativeColumns,
+        );
+        if (Math.abs(node.position.x - x) < 0.5 && chainIndex === node.data.chainIndex) {
+          return node;
+        }
+        changed = true;
+        return {
+          ...node,
+          position: { ...node.position, x },
+          data: { ...node.data, chainIndex, supportLane },
+        };
+      });
+      return changed ? next : existing;
+    });
+  }, [mitigativeChainIndexByNodeId, mitigativeColumns, setNodes]);
 
   const deleteSelected = useCallback(() => {
     if (selectedNodeIds.length === 0 && selectedEdgeIds.length === 0) {
@@ -409,7 +520,17 @@ export function BowtieEditor({
       ...cloneSnapshot(node),
       id: idMap[node.id],
       position: {
-        x: laneXForNode(node.data.type, node.data),
+        x: laneXForNode(
+          node.data.type,
+          {
+            ...node.data,
+            chainIndex:
+              node.data.type === "mitigative_barrier"
+                ? (mitigativeChainIndexByNodeId[node.id] ?? node.data.chainIndex)
+                : node.data.chainIndex,
+          },
+          mitigativeColumns,
+        ),
         y: node.position.y + offset,
       },
     }));
@@ -429,7 +550,7 @@ export function BowtieEditor({
     setSelectedEdgeIds(pastedEdges.map((edge) => edge.id));
     setSelectedId(pastedNodes[0]?.id ?? null);
     pasteCountRef.current += 1;
-  }, [setEdges, setNodes]);
+  }, [mitigativeChainIndexByNodeId, mitigativeColumns, setEdges, setNodes]);
 
   const cutSelection = useCallback(() => {
     const didCopy = copySelection();
@@ -497,14 +618,14 @@ export function BowtieEditor({
 
   function addNode(type: NodeType) {
     const meta = NODE_TYPE_META[type];
-    const supportLane = supportLaneForNode(selectedNode);
+    const supportLane = supportLaneForNode(selectedNode, mitigativeColumns);
     setNodes((existing) => [
       ...existing,
       {
         id: uuid(),
         type: "bowtieNode",
         position: {
-          x: laneXForNode(type, { supportLane }),
+          x: laneXForNode(type, { supportLane }, mitigativeColumns),
           y: 100 + (existing.length % 8) * 70,
         },
         data: {
@@ -549,7 +670,7 @@ export function BowtieEditor({
     if (!selectedNode || items.length === 0) return;
     const selectedType = selectedNode.data.type;
     const fallbackType = inferTypeFromAction(action, selectedType);
-    const selectedSupportLane = supportLaneForNode(selectedNode);
+    const selectedSupportLane = supportLaneForNode(selectedNode, mitigativeColumns);
 
     const newNodes: Node<BowtieNodeData>[] = items.map((item, index) => {
       const nodeType = item.nodeType ?? fallbackType;
@@ -557,11 +678,15 @@ export function BowtieEditor({
         nodeType === "escalation_factor" || nodeType === "escalation_factor_control"
           ? selectedSupportLane
           : undefined;
+      const supportAnchorX =
+        nodeType === "escalation_factor" || nodeType === "escalation_factor_control"
+          ? selectedNode.position.x
+          : undefined;
       return {
       id: uuid(),
       type: "bowtieNode",
       position: {
-        x: laneXForNode(nodeType, { supportLane }),
+        x: laneXForNode(nodeType, { supportLane, supportAnchorX }, mitigativeColumns),
         y: (selectedNode.position?.y ?? 220) + 80 + index * 95,
       },
       data: {
@@ -570,6 +695,11 @@ export function BowtieEditor({
         title: item.label,
         description: "",
         supportLane,
+        supportAnchorX,
+        chainIndex:
+          nodeType === "mitigative_barrier"
+            ? (mitigativeChainIndexByNodeId[selectedNode.id] ?? selectedNode.data.chainIndex)
+            : undefined,
       },
       };
     });
@@ -597,36 +727,38 @@ export function BowtieEditor({
 
     const supportLane =
       childType === "escalation_factor" || childType === "escalation_factor_control"
-        ? supportLaneForNode(parent)
+        ? supportLaneForNode(parent, mitigativeColumns)
+        : undefined;
+    const supportAnchorX =
+      childType === "escalation_factor" || childType === "escalation_factor_control"
+        ? parent.position.x
         : undefined;
 
-    const x = laneXForNode(childType, { supportLane });
-    const y = parent.position.y + (siblingsSameType + 1) * 90;
+    let chainIndex: number | undefined =
+      childType === "mitigative_barrier"
+        ? mitigativeChainIndexByNodeId[parent.id] ?? parent.data.chainIndex
+        : undefined;
+
+    let x = laneXForNode(childType, { supportLane, supportAnchorX, chainIndex }, mitigativeColumns);
+    let y = parent.position.y + (siblingsSameType + 1) * 90;
 
     const childId = uuid();
-    const newNode: Node<BowtieNodeData> = {
-      id: childId,
-      type: "bowtieNode",
-      position: { x, y },
-      data: {
-        type: childType,
-        typeLabel: NODE_TYPE_META[childType].label,
-        title: NODE_TYPE_META[childType].label,
-        description: "",
-        supportLane,
-      },
-    };
-
     const nextEdges: Edge[] = [];
     const edgesToRemove = new Set<string>();
 
     if (childType === "mitigative_barrier" && parent.data.type === "consequence" && side === "left") {
       const topEvent = findNearestNodeByType(nodes, "top_event", parent.position.y);
-      if (topEvent) {
-        nextEdges.push({ id: uuid(), source: topEvent.id, target: childId, type: "smoothstep" });
+      const chain = getMitigativeChainForConsequence(nodes, edges, parent.id);
+      chainIndex = chain.length;
+      y = parent.position.y;
+      x = laneXForNode("mitigative_barrier", { chainIndex }, Math.max(mitigativeColumns, chain.length + 1));
+
+      const lastInChainId = chain.length > 0 ? chain[chain.length - 1] : topEvent?.id;
+      if (lastInChainId) {
         edges
-          .filter((edge) => edge.source === topEvent.id && edge.target === parent.id)
+          .filter((edge) => edge.source === lastInChainId && edge.target === parent.id)
           .forEach((edge) => edgesToRemove.add(edge.id));
+        nextEdges.push({ id: uuid(), source: lastInChainId, target: childId, type: "smoothstep" });
       }
       nextEdges.push({ id: uuid(), source: childId, target: parent.id, type: "smoothstep" });
     } else if (childType === "preventive_barrier" && parent.data.type === "threat" && side === "right") {
@@ -642,12 +774,27 @@ export function BowtieEditor({
       nextEdges.push(getEdgeForPair(parent.data.type, childType, childId, parentId));
     }
 
+    const newNode: Node<BowtieNodeData> = {
+      id: childId,
+      type: "bowtieNode",
+      position: { x, y },
+      data: {
+        type: childType,
+        typeLabel: NODE_TYPE_META[childType].label,
+        title: NODE_TYPE_META[childType].label,
+        description: "",
+        supportLane,
+        supportAnchorX,
+        chainIndex,
+      },
+    };
+
     setNodes((existing) => [...existing, newNode]);
     setEdges((existing) => {
       const kept = edgesToRemove.size > 0 ? existing.filter((edge) => !edgesToRemove.has(edge.id)) : existing;
       return [...kept, ...nextEdges];
     });
-  }, [edges, nodes, setEdges, setNodes]);
+  }, [edges, mitigativeChainIndexByNodeId, mitigativeColumns, nodes, setEdges, setNodes]);
 
   const toggleCollapse = useCallback((nodeId: string, side: "left" | "right") => {
     setNodes((existing) =>
@@ -735,8 +882,12 @@ export function BowtieEditor({
         ...node.data,
         supportLane:
           node.data.type === "escalation_factor" || node.data.type === "escalation_factor_control"
-            ? supportLaneForNode(node)
+            ? supportLaneForNode(node, mitigativeColumns)
             : node.data.supportLane,
+        chainIndex:
+          node.data.type === "mitigative_barrier"
+            ? (mitigativeChainIndexByNodeId[node.id] ?? node.data.chainIndex)
+            : node.data.chainIndex,
         quickAddLeft: quickAddOptionsFor(node.data.type, "left"),
         quickAddRight: quickAddOptionsFor(node.data.type, "right"),
         canCollapseLeft: hasNodeOnSide(node.id, "left"),
@@ -745,7 +896,15 @@ export function BowtieEditor({
         onToggleCollapse: toggleCollapse,
       },
     }));
-  }, [nodes, edges, hiddenNodeIds, quickAddNode, toggleCollapse]);
+  }, [
+    nodes,
+    edges,
+    hiddenNodeIds,
+    mitigativeChainIndexByNodeId,
+    mitigativeColumns,
+    quickAddNode,
+    toggleCollapse,
+  ]);
 
   const viewEdges = useMemo(
     () =>
@@ -890,22 +1049,27 @@ export function BowtieEditor({
                 style={{
                   left: LANE_START_X,
                   top: LANE_START_Y,
-                  width: LANE_WIDTH * LANE_COUNT,
+                  width: totalLaneWidth,
                   height: LANE_HEIGHT,
                   transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`,
                   transformOrigin: "top left",
                 }}
               >
                 <div className="absolute inset-0 flex">
-                  {LANE_META.map((lane) => (
-                    <div key={lane.label} className={`h-full w-[250px] ${lane.className}`} />
+                  {LANE_META.map((lane, index) => (
+                    <div
+                      key={lane.label}
+                      className={`h-full ${lane.className}`}
+                      style={{ width: laneWidths[index] }}
+                    />
                   ))}
                 </div>
                 <div className="absolute left-0 top-0 flex h-12 w-full border-b border-zinc-300/70 bg-white/90">
-                  {LANE_META.map((lane) => (
+                  {LANE_META.map((lane, index) => (
                     <div
                       key={`${lane.label}-label`}
-                      className="flex w-[250px] items-center justify-center px-2 text-center text-[11px] font-semibold uppercase tracking-wider text-zinc-700"
+                      className="flex items-center justify-center px-2 text-center text-[11px] font-semibold uppercase tracking-wider text-zinc-700"
+                      style={{ width: laneWidths[index] }}
                     >
                       {lane.label}
                     </div>
