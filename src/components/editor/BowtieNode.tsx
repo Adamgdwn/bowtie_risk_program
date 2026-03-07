@@ -90,7 +90,7 @@ export default function BowtieNode({ id, data, selected }: NodeProps<BowtieNodeU
       ) : null}
 
       <div
-        className="min-w-52 rounded-lg border-2 bg-white p-3 shadow-sm"
+        className="w-52 min-w-52 max-w-52 rounded-lg border-2 bg-white p-3 shadow-sm"
         style={{
           borderColor: meta.color,
           backgroundColor: isEscalation ? supportBg : undefined,
@@ -105,8 +105,14 @@ export default function BowtieNode({ id, data, selected }: NodeProps<BowtieNodeU
           </div>
         ) : null}
         <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{meta.label}</div>
-        <div className="mt-1 text-sm font-semibold text-zinc-900">{data.title || "Untitled"}</div>
-        {data.description ? <div className="mt-1 text-xs text-zinc-600">{data.description}</div> : null}
+        <div className="mt-1 break-words whitespace-normal text-sm font-semibold leading-tight text-zinc-900">
+          {data.title || "Untitled"}
+        </div>
+        {data.description ? (
+          <div className="mt-1 break-words whitespace-pre-wrap text-xs leading-snug text-zinc-600">
+            {data.description}
+          </div>
+        ) : null}
       </div>
       <Handle type="target" position={Position.Left} />
       <Handle type="source" position={Position.Right} />
