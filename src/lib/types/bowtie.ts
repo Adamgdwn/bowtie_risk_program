@@ -24,6 +24,7 @@ export interface BowtieNodeData {
   type: NodeType;
   title: string;
   description?: string;
+  supportLane?: "preventive" | "mitigative";
   collapsedLeft?: boolean;
   collapsedRight?: boolean;
   tags?: string[];

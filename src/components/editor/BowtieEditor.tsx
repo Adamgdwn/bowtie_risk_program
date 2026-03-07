@@ -84,6 +84,27 @@ function laneXForType(type: NodeType) {
   return LANE_START_X + laneIndex * LANE_WIDTH + (LANE_WIDTH - DEFAULT_NODE_WIDTH) / 2;
 }
 
+function supportLaneForNode(node: Node<BowtieNodeData> | null | undefined): "preventive" | "mitigative" {
+  if (!node) return "preventive";
+  if (node.data.type === "mitigative_barrier") return "mitigative";
+  if (node.data.type === "preventive_barrier") return "preventive";
+  if (node.data.supportLane) return node.data.supportLane;
+  if (node.data.type === "escalation_factor" || node.data.type === "escalation_factor_control") {
+    const laneThreeX = LANE_START_X + 3 * LANE_WIDTH;
+    return node.position.x >= laneThreeX ? "mitigative" : "preventive";
+  }
+  return "preventive";
+}
+
+function laneXForNode(type: NodeType, data?: Partial<BowtieNodeData>) {
+  if (type === "escalation_factor" || type === "escalation_factor_control") {
+    const supportLane = data?.supportLane ?? "preventive";
+    const laneIndex = supportLane === "mitigative" ? 3 : 1;
+    return LANE_START_X + laneIndex * LANE_WIDTH + (LANE_WIDTH - DEFAULT_NODE_WIDTH) / 2;
+  }
+  return laneXForType(type);
+}
+
 function cloneSnapshot<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
@@ -125,6 +146,7 @@ function getEdgeForPair(
   newNodeId: string,
   selectedIdValue: string,
 ): Edge {
+  const escalationStyle = { stroke: "#a855f7", strokeDasharray: "6 4" };
   if (created === "threat") {
     return { id: uuid(), source: newNodeId, target: selectedIdValue, type: "smoothstep" };
   }
@@ -144,7 +166,13 @@ function getEdgeForPair(
     return { id: uuid(), source: selectedIdValue, target: newNodeId, type: "smoothstep" };
   }
   if (created === "escalation_factor" || created === "escalation_factor_control") {
-    return { id: uuid(), source: newNodeId, target: selectedIdValue, type: "smoothstep" };
+    return {
+      id: uuid(),
+      source: newNodeId,
+      target: selectedIdValue,
+      type: "smoothstep",
+      style: escalationStyle,
+    };
   }
   return { id: uuid(), source: newNodeId, target: selectedIdValue, type: "smoothstep" };
 }
@@ -255,7 +283,7 @@ export function BowtieEditor({
         return {
           ...change,
           position: {
-            x: laneXForType(currentNode.data.type),
+            x: laneXForNode(currentNode.data.type, currentNode.data),
             y: change.position.y,
           },
         };
@@ -369,7 +397,7 @@ export function BowtieEditor({
       ...cloneSnapshot(node),
       id: idMap[node.id],
       position: {
-        x: laneXForType(node.data.type),
+        x: laneXForNode(node.data.type, node.data),
         y: node.position.y + offset,
       },
     }));
@@ -457,13 +485,14 @@ export function BowtieEditor({
 
   function addNode(type: NodeType) {
     const meta = NODE_TYPE_META[type];
+    const supportLane = supportLaneForNode(selectedNode);
     setNodes((existing) => [
       ...existing,
       {
         id: uuid(),
         type: "bowtieNode",
         position: {
-          x: laneXForType(type),
+          x: laneXForNode(type, { supportLane }),
           y: 100 + (existing.length % 8) * 70,
         },
         data: {
@@ -471,6 +500,10 @@ export function BowtieEditor({
           typeLabel: meta.label,
           title: meta.label,
           description: "",
+          supportLane:
+            type === "escalation_factor" || type === "escalation_factor_control"
+              ? supportLane
+              : undefined,
         },
       },
     ]);
@@ -504,14 +537,19 @@ export function BowtieEditor({
     if (!selectedNode || items.length === 0) return;
     const selectedType = selectedNode.data.type;
     const fallbackType = inferTypeFromAction(action, selectedType);
+    const selectedSupportLane = supportLaneForNode(selectedNode);
 
     const newNodes: Node<BowtieNodeData>[] = items.map((item, index) => {
       const nodeType = item.nodeType ?? fallbackType;
+      const supportLane =
+        nodeType === "escalation_factor" || nodeType === "escalation_factor_control"
+          ? selectedSupportLane
+          : undefined;
       return {
       id: uuid(),
       type: "bowtieNode",
       position: {
-        x: laneXForType(nodeType),
+        x: laneXForNode(nodeType, { supportLane }),
         y: (selectedNode.position?.y ?? 220) + 80 + index * 95,
       },
       data: {
@@ -519,6 +557,7 @@ export function BowtieEditor({
         typeLabel: NODE_TYPE_META[nodeType].label,
         title: item.label,
         description: "",
+        supportLane,
       },
       };
     });
@@ -544,7 +583,12 @@ export function BowtieEditor({
         (side === "left" ? node.position.x < parent.position.x : node.position.x > parent.position.x),
     ).length;
 
-    const x = laneXForType(childType);
+    const supportLane =
+      childType === "escalation_factor" || childType === "escalation_factor_control"
+        ? supportLaneForNode(parent)
+        : undefined;
+
+    const x = laneXForNode(childType, { supportLane });
     const y = parent.position.y + (siblingsSameType + 1) * 90;
 
     const childId = uuid();
@@ -557,6 +601,7 @@ export function BowtieEditor({
         typeLabel: NODE_TYPE_META[childType].label,
         title: NODE_TYPE_META[childType].label,
         description: "",
+        supportLane,
       },
     };
 
@@ -649,6 +694,10 @@ export function BowtieEditor({
       hidden: hiddenNodeIds.has(node.id),
       data: {
         ...node.data,
+        supportLane:
+          node.data.type === "escalation_factor" || node.data.type === "escalation_factor_control"
+            ? supportLaneForNode(node)
+            : node.data.supportLane,
         quickAddLeft: quickAddOptionsFor(node.data.type, "left"),
         quickAddRight: quickAddOptionsFor(node.data.type, "right"),
         canCollapseLeft: hasNodeOnSide(node.id, "left"),

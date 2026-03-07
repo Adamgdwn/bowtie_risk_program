@@ -22,6 +22,12 @@ export default function BowtieNode({ id, data, selected }: NodeProps<BowtieNodeU
   const meta = NODE_TYPE_META[data.type ?? "threat"];
   const leftOptions = data.quickAddLeft ?? [];
   const rightOptions = data.quickAddRight ?? [];
+  const isEscalation =
+    data.type === "escalation_factor" || data.type === "escalation_factor_control";
+  const supportLabel =
+    data.supportLane === "mitigative" ? "Mitigative Support" : "Preventive Support";
+  const supportAccent = data.supportLane === "mitigative" ? "#0ea5e9" : "#f59e0b";
+  const supportBg = data.supportLane === "mitigative" ? "#f0f9ff" : "#fffbeb";
 
   function onAdd(side: "left" | "right", type: NodeType) {
     data.onQuickAdd?.(id, side, type);
@@ -87,9 +93,17 @@ export default function BowtieNode({ id, data, selected }: NodeProps<BowtieNodeU
         className="min-w-52 rounded-lg border-2 bg-white p-3 shadow-sm"
         style={{
           borderColor: meta.color,
+          backgroundColor: isEscalation ? supportBg : undefined,
+          borderLeftColor: isEscalation ? supportAccent : meta.color,
+          borderLeftWidth: isEscalation ? 6 : 2,
           boxShadow: selected ? `0 0 0 3px ${meta.color}33` : undefined,
         }}
       >
+        {isEscalation ? (
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+            {supportLabel}
+          </div>
+        ) : null}
         <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{meta.label}</div>
         <div className="mt-1 text-sm font-semibold text-zinc-900">{data.title || "Untitled"}</div>
         {data.description ? <div className="mt-1 text-xs text-zinc-600">{data.description}</div> : null}
