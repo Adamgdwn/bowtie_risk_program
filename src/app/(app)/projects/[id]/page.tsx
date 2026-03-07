@@ -41,6 +41,7 @@ export default async function ProjectEditorPage({ params }: { params: Promise<{ 
         initialWorkflowState={{
           completed: workflow.completed ?? {},
           notes: workflow.notes ?? {},
+          step1TopEvent: workflow.step1TopEvent ?? project.top_event ?? "",
           guidanceByStep: workflow.guidanceByStep ?? {},
           lastActiveStepId: workflow.lastActiveStepId ?? null,
         }}

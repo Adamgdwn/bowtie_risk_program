@@ -312,6 +312,10 @@ export function BowtieEditor({
     () => nodes.find((node) => node.id === selectedId) ?? null,
     [nodes, selectedId],
   );
+  const worksheetTopEvent = useMemo(
+    () => nodes.find((node) => node.data.type === "top_event")?.data.title ?? projectMeta.topEvent,
+    [nodes, projectMeta.topEvent],
+  );
   const { indexByNodeId: mitigativeChainIndexByNodeId, maxDepth: mitigativeChainDepth } = useMemo(
     () => computeMitigativeChainIndexById(nodes, edges),
     [nodes, edges],
@@ -322,6 +326,39 @@ export function BowtieEditor({
     [mitigativeColumns],
   );
   const totalLaneWidth = useMemo(() => laneWidths.reduce((sum, width) => sum + width, 0), [laneWidths]);
+  const onWorksheetTopEventChange = useCallback(
+    (title: string) => {
+      const normalized = title.trim();
+      setNodes((existing) => {
+        const topEventNodes = existing.filter((node) => node.data.type === "top_event");
+        if (topEventNodes.length === 0) {
+          return [
+            ...existing,
+            {
+              id: uuid(),
+              type: "bowtieNode",
+              position: {
+                x: laneXForNode("top_event", {}, mitigativeColumns),
+                y: 260,
+              },
+              data: {
+                type: "top_event",
+                typeLabel: NODE_TYPE_META.top_event.label,
+                title: normalized || "Top Event",
+                description: "",
+              },
+            },
+          ];
+        }
+        return existing.map((node) =>
+          node.data.type === "top_event"
+            ? { ...node, data: { ...node.data, title: normalized || "Top Event" } }
+            : node,
+        );
+      });
+    },
+    [mitigativeColumns, setNodes],
+  );
 
   const warnings = useMemo(
     () => validateBowtie(nodes, edges).map((item) => item.message),
@@ -1132,6 +1169,8 @@ export function BowtieEditor({
             nodes={nodes}
             edges={edges}
             initialState={initialWorkflowState}
+            currentTopEvent={worksheetTopEvent}
+            onTopEventChange={onWorksheetTopEventChange}
             onGuidanceContextChange={(payload) => {
               setWorksheetStepTitle(payload.stepTitle || "Select a worksheet step");
               setWorksheetGuidance(payload.guidance);

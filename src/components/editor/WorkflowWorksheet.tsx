@@ -16,6 +16,8 @@ interface Props {
   nodes: Node<BowtieNodeData>[];
   edges: Edge[];
   initialState?: WorkflowState | null;
+  currentTopEvent: string;
+  onTopEventChange?: (title: string) => void;
   onGuidanceContextChange?: (payload: {
     stepId: number | null;
     stepTitle: string;
@@ -122,11 +124,14 @@ export function WorkflowWorksheet({
   nodes,
   edges,
   initialState,
+  currentTopEvent,
+  onTopEventChange,
   onGuidanceContextChange,
 }: Props) {
   const [state, setState] = useState<WorkflowState>(() => ({
     completed: initialState?.completed ?? {},
     notes: initialState?.notes ?? {},
+    step1TopEvent: initialState?.step1TopEvent ?? currentTopEvent ?? projectMeta.topEvent ?? "",
     guidanceByStep: initialState?.guidanceByStep ?? {},
     lastActiveStepId: initialState?.lastActiveStepId ?? null,
   }));
@@ -316,7 +321,8 @@ export function WorkflowWorksheet({
       <section className="rounded-xl border border-zinc-200 bg-white p-4">
         <h2 className="text-lg font-semibold text-zinc-900">Bowtie Procedure Worksheet</h2>
         <p className="text-sm text-zinc-600">
-          {projectMeta.title} | {projectMeta.industry} | Top Event: {projectMeta.topEvent}
+          {projectMeta.title} | {projectMeta.industry} | Top Event:{" "}
+          {state.step1TopEvent?.trim() || currentTopEvent || projectMeta.topEvent}
         </p>
         <p className="mt-2 text-sm text-zinc-700">
           Progress: <strong>{completionPercent}%</strong> ({Object.values(state.completed ?? {}).filter(Boolean).length}
@@ -342,12 +348,34 @@ export function WorkflowWorksheet({
         {STEPS.map((step) => (
           <article key={step.id} className="rounded-xl border border-zinc-200 bg-white p-4">
             <div className="flex items-start justify-between gap-3">
-              <div>
+              <div className="flex-1">
                 <h3 className="text-sm font-semibold text-zinc-900">
                   Step {step.id}: {step.title}
                 </h3>
                 <p className="mt-1 text-xs text-zinc-600">{step.ideas}</p>
               </div>
+              {step.id === 1 ? (
+                <div className="mx-auto w-full max-w-sm rounded-lg border-2 border-[#1F2933] bg-[#F5F3F0] p-2">
+                  <label className="block text-[11px] font-semibold uppercase tracking-wide text-[#1F2933]">
+                    Top Event Input
+                  </label>
+                  <input
+                    value={state.step1TopEvent ?? ""}
+                    onFocus={() => handleStepFocus(step.id, step.title)}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setSyncMessage("Saving...");
+                      setState((prev) => ({
+                        ...prev,
+                        step1TopEvent: value,
+                      }));
+                      onTopEventChange?.(value);
+                    }}
+                    className="mt-1 w-full rounded border border-[#9CA3AF] bg-white px-2 py-1 text-sm text-[#1F2933]"
+                    placeholder="Enter the single top event statement"
+                  />
+                </div>
+              ) : null}
               <label className="flex items-center gap-2 text-xs font-semibold text-zinc-700">
                 <input
                   type="checkbox"

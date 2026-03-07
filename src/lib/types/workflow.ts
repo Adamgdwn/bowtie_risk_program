@@ -10,6 +10,7 @@ export interface StepGuidance {
 export interface WorkflowState {
   completed: Record<string, boolean>;
   notes: Record<string, string>;
+  step1TopEvent?: string;
   guidanceByStep?: Record<string, StepGuidance>;
   lastActiveStepId?: number | null;
 }

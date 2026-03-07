@@ -14,6 +14,7 @@ const stepGuidanceSchema = z.object({
 const workflowSchema = z.object({
   completed: z.record(z.string(), z.boolean()),
   notes: z.record(z.string(), z.string()),
+  step1TopEvent: z.string().optional(),
   guidanceByStep: z.record(z.string(), stepGuidanceSchema).optional(),
   lastActiveStepId: z.number().int().nullable().optional(),
 });
