@@ -59,6 +59,7 @@ const LANE_START_X = 0;
 const LANE_START_Y = -120;
 const LANE_HEIGHT = 2200;
 const DEFAULT_NODE_WIDTH = 208;
+const DEFAULT_VIEWPORT = { x: 0, y: 80, zoom: 0.72 };
 
 const LANE_META: Array<{ label: string; className: string }> = [
   { label: "Threats", className: "border-r border-[#9CA3AF]/70 bg-[#f0f3f6]" },
@@ -276,6 +277,7 @@ export function BowtieEditor({
   const [selectedEdgeIds, setSelectedEdgeIds] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<"canvas" | "worksheet">("canvas");
   const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 });
+  const [didInitViewport, setDidInitViewport] = useState(false);
   const [worksheetStepTitle, setWorksheetStepTitle] = useState("Select a worksheet step");
   const [worksheetGuidance, setWorksheetGuidance] = useState<StepGuidance | null>(
     initialWorkflowState?.lastActiveStepId
@@ -326,6 +328,7 @@ export function BowtieEditor({
     [mitigativeColumns],
   );
   const totalLaneWidth = useMemo(() => laneWidths.reduce((sum, width) => sum + width, 0), [laneWidths]);
+  const viewportStorageKey = useMemo(() => `bowtie:viewport:${projectId}`, [projectId]);
   const onWorksheetTopEventChange = useCallback(
     (title: string) => {
       const normalized = title.trim();
@@ -359,6 +362,35 @@ export function BowtieEditor({
     },
     [mitigativeColumns, setNodes],
   );
+  const initializeViewport = useCallback(
+    (instance: ReactFlowInstance) => {
+      if (didInitViewport) return;
+
+      let targetViewport = DEFAULT_VIEWPORT;
+      if (typeof window !== "undefined" && nodes.length > 0) {
+        const raw = window.localStorage.getItem(viewportStorageKey);
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw) as { x?: number; y?: number; zoom?: number };
+            if (
+              typeof parsed?.x === "number" &&
+              typeof parsed?.y === "number" &&
+              typeof parsed?.zoom === "number"
+            ) {
+              targetViewport = { x: parsed.x, y: parsed.y, zoom: parsed.zoom };
+            }
+          } catch {
+            // Ignore malformed stored viewport.
+          }
+        }
+      }
+
+      instance.setViewport(targetViewport, { duration: 0 });
+      setViewport(targetViewport);
+      setDidInitViewport(true);
+    },
+    [didInitViewport, nodes.length, viewportStorageKey],
+  );
 
   const warnings = useMemo(
     () => validateBowtie(nodes, edges).map((item) => item.message),
@@ -376,8 +408,11 @@ export function BowtieEditor({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ nodes: nodesForSave, edges }),
     });
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(viewportStorageKey, JSON.stringify(viewport));
+    }
     setSaving(false);
-  }, [projectId, nodes, edges]);
+  }, [projectId, nodes, edges, viewportStorageKey, viewport]);
 
   useEffect(() => {
     window.clearTimeout(autosaveRef.current);
@@ -408,6 +443,38 @@ export function BowtieEditor({
     history.future = [];
     history.lastHash = hash;
   }, [nodes, edges]);
+
+  useEffect(() => {
+    const existingTopEvent = nodes.some((node) => node.data.type === "top_event");
+    if (existingTopEvent) return;
+
+    const fromWorksheet = initialWorkflowState?.step1TopEvent?.trim();
+    const fallbackTitle = fromWorksheet || projectMeta.topEvent?.trim();
+    if (!fallbackTitle) return;
+
+    setNodes((existing) => {
+      if (existing.some((node) => node.data.type === "top_event")) {
+        return existing;
+      }
+      return [
+        ...existing,
+        {
+          id: uuid(),
+          type: "bowtieNode",
+          position: {
+            x: laneXForNode("top_event", {}, mitigativeColumns),
+            y: 260,
+          },
+          data: {
+            type: "top_event",
+            typeLabel: NODE_TYPE_META.top_event.label,
+            title: fallbackTitle,
+            description: "",
+          },
+        },
+      ];
+    });
+  }, [initialWorkflowState?.step1TopEvent, mitigativeColumns, nodes, projectMeta.topEvent, setNodes]);
 
   const onConnect = useCallback(
     (connection: Edge | Connection) => setEdges((existing) => addEdge({ ...connection, type: "smoothstep" }, existing)),
@@ -1151,8 +1218,7 @@ export function BowtieEditor({
               onNodeClick={(_, node) => setSelectedId(node.id)}
               onPaneClick={() => setSelectedId(null)}
               onMove={(_, nextViewport) => setViewport(nextViewport)}
-              onInit={(instance: ReactFlowInstance) => setViewport(instance.getViewport())}
-              fitView
+              onInit={(instance: ReactFlowInstance) => initializeViewport(instance)}
               snapToGrid
               snapGrid={[12, 12]}
               deleteKeyCode={null}
