@@ -277,7 +277,6 @@ export function BowtieEditor({
   const [selectedEdgeIds, setSelectedEdgeIds] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<"canvas" | "worksheet">("canvas");
   const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 });
-  const [didInitViewport, setDidInitViewport] = useState(false);
   const [worksheetStepTitle, setWorksheetStepTitle] = useState("Select a worksheet step");
   const [worksheetGuidance, setWorksheetGuidance] = useState<StepGuidance | null>(
     initialWorkflowState?.lastActiveStepId
@@ -405,8 +404,6 @@ export function BowtieEditor({
   }, [mitigativeColumns, setNodes]);
   const initializeViewport = useCallback(
     (instance: ReactFlowInstance) => {
-      if (didInitViewport) return;
-
       let targetViewport = DEFAULT_VIEWPORT;
       if (typeof window !== "undefined" && nodes.length > 0) {
         const raw = window.localStorage.getItem(viewportStorageKey);
@@ -428,9 +425,8 @@ export function BowtieEditor({
 
       instance.setViewport(targetViewport, { duration: 0 });
       setViewport(targetViewport);
-      setDidInitViewport(true);
     },
-    [didInitViewport, nodes.length, viewportStorageKey],
+    [nodes.length, viewportStorageKey],
   );
 
   const warnings = useMemo(
