@@ -51,7 +51,7 @@ export function AuthForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="brand-card w-full max-w-md space-y-3 rounded-xl p-5">
+    <form onSubmit={onSubmit} className="brand-card w-full max-w-md space-y-3 rounded-2xl p-5">
       <h1 className="brand-heading text-lg font-semibold">Log in or Create Account</h1>
       <p className="brand-text-muted text-sm">
         Sign-up sends an email verification link through Supabase Auth.
@@ -63,7 +63,7 @@ export function AuthForm() {
         value={email}
         onChange={(event) => setEmail(event.target.value)}
         placeholder="you@company.com"
-        className="w-full rounded border border-[#9CA3AF] bg-white px-3 py-2 text-sm"
+        className="brand-input w-full rounded-lg px-3 py-2 text-sm"
       />
       <input
         type="password"
@@ -72,21 +72,21 @@ export function AuthForm() {
         value={password}
         onChange={(event) => setPassword(event.target.value)}
         placeholder="Password"
-        className="w-full rounded border border-[#9CA3AF] bg-white px-3 py-2 text-sm"
+        className="brand-input w-full rounded-lg px-3 py-2 text-sm"
       />
 
       <div className="flex gap-2">
         <button
           type="submit"
           disabled={loading}
-          className="brand-btn-primary rounded px-4 py-2 text-sm font-semibold"
+          className="brand-btn-primary rounded-lg px-4 py-2 text-sm font-semibold"
         >
           {loading ? "Working..." : mode === "login" ? "Log In" : "Create Account"}
         </button>
         <button
           type="button"
           onClick={() => setMode(mode === "login" ? "signup" : "login")}
-          className="brand-btn-secondary rounded px-4 py-2 text-sm"
+          className="brand-btn-secondary rounded-lg px-4 py-2 text-sm"
         >
           {mode === "login" ? "Need account?" : "Have account?"}
         </button>

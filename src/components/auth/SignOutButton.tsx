@@ -14,7 +14,7 @@ export function SignOutButton() {
   }
 
   return (
-    <button className="brand-btn-secondary rounded px-3 py-1 text-sm" onClick={signOut}>
+    <button className="brand-btn-secondary rounded-lg px-3 py-1 text-sm" onClick={signOut}>
       Sign out
     </button>
   );

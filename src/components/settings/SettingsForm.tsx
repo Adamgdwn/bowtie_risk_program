@@ -48,7 +48,7 @@ export function SettingsForm({ initialSettings }: Props) {
 
   return (
     <div className="max-w-2xl space-y-4">
-      <div className="brand-card rounded-xl p-4">
+      <div className="brand-card rounded-2xl p-4">
         <h2 className="brand-heading text-sm font-semibold">AI Provider API Key (BYOK)</h2>
         <p className="brand-text-muted mt-1 text-sm">
           Stored encrypted server-side. Keys are never logged.
@@ -59,7 +59,7 @@ export function SettingsForm({ initialSettings }: Props) {
           value={apiKey}
           onChange={(event) => setApiKey(event.target.value)}
           placeholder="Enter or rotate API key"
-          className="mt-2 w-full rounded border border-[#9CA3AF] bg-white px-3 py-2 text-sm"
+          className="brand-input mt-2 w-full rounded-lg px-3 py-2 text-sm"
         />
         <label className="mt-3 block text-xs font-semibold text-[#1F2933]">BYOK Provider</label>
         <select
@@ -69,7 +69,7 @@ export function SettingsForm({ initialSettings }: Props) {
               event.target.value as "auto" | "openai" | "openrouter" | "anthropic" | "gemini",
             )
           }
-          className="mt-1 w-full rounded border border-[#9CA3AF] bg-white px-3 py-2 text-sm"
+          className="brand-select mt-1 w-full rounded-lg px-3 py-2 text-sm"
         >
           <option value="auto">Auto-detect from key</option>
           <option value="openai">OpenAI</option>
@@ -79,7 +79,7 @@ export function SettingsForm({ initialSettings }: Props) {
         </select>
       </div>
 
-      <div className="brand-card rounded-xl p-4">
+      <div className="brand-card rounded-2xl p-4">
         <h2 className="brand-heading text-sm font-semibold">Plan + LLM Mode</h2>
         <p className="brand-text-muted mt-1 text-sm">
           Team tier managed model is currently a backend placeholder contract.
@@ -88,7 +88,7 @@ export function SettingsForm({ initialSettings }: Props) {
           <select
             value={planTier}
             onChange={(event) => setPlanTier(event.target.value as "free" | "pro" | "team")}
-            className="rounded border border-[#9CA3AF] bg-white px-3 py-2 text-sm"
+            className="brand-select rounded-lg px-3 py-2 text-sm"
           >
             <option value="free">Free (2 projects, BYOK)</option>
             <option value="pro">Pro $10 (unlimited, BYOK)</option>
@@ -98,7 +98,7 @@ export function SettingsForm({ initialSettings }: Props) {
           <select
             value={selectedModel}
             onChange={(event) => setSelectedModel(event.target.value)}
-            className="rounded border border-[#9CA3AF] bg-white px-3 py-2 text-sm"
+            className="brand-select rounded-lg px-3 py-2 text-sm"
           >
             <option value="byok">Bring your own key</option>
             <option value="managed-gpt">Managed GPT (placeholder)</option>
@@ -109,7 +109,7 @@ export function SettingsForm({ initialSettings }: Props) {
       </div>
 
       <button
-        className="brand-btn-primary rounded px-4 py-2 text-sm font-semibold disabled:opacity-60"
+        className="brand-btn-primary rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-60"
         onClick={saveSettings}
         disabled={saving}
       >

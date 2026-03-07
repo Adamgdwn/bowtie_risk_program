@@ -7,16 +7,22 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="brand-page min-h-screen">
-      <header className="brand-card border-x-0 border-t-0">
+      <header className="brand-nav-shell sticky top-0 z-40 border-b border-[#9CA3AF]">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-4">
-            <Link href="/dashboard" className="brand-heading text-sm font-semibold">
+            <Link href="/dashboard" className="brand-heading text-sm font-semibold tracking-wide">
               Bowtie Risk Builder
             </Link>
-            <nav className="flex items-center gap-3 text-sm text-[#1f2933]">
-              <Link href="/dashboard">Dashboard</Link>
-              <Link href="/settings">Settings</Link>
-              <Link href="/billing">Billing</Link>
+            <nav className="flex items-center gap-3 text-sm">
+              <Link href="/dashboard" className="brand-nav-link">
+                Dashboard
+              </Link>
+              <Link href="/settings" className="brand-nav-link">
+                Settings
+              </Link>
+              <Link href="/billing" className="brand-nav-link">
+                Billing
+              </Link>
             </nav>
           </div>
           <div className="flex items-center gap-3">

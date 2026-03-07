@@ -36,7 +36,12 @@ export default async function SettingsPage() {
 
   return (
     <main className="mx-auto max-w-7xl p-4">
-      <h1 className="brand-heading mb-3 text-xl font-semibold">Settings</h1>
+      <section className="brand-card mb-4 rounded-2xl p-5">
+        <h1 className="brand-heading text-xl font-semibold">Settings</h1>
+        <p className="brand-text-muted mt-1 text-sm">
+          Manage API connectivity, model mode, and subscription behavior.
+        </p>
+      </section>
       <SettingsForm
         initialSettings={{
           plan_tier: data?.plan_tier ?? "free",

@@ -37,20 +37,25 @@ export function CreateProjectForm() {
   }
 
   return (
-    <form onSubmit={submit} className="brand-card rounded-xl p-4">
-      <h2 className="brand-heading text-sm font-semibold">Create New Bowtie</h2>
+    <form onSubmit={submit} className="brand-card rounded-2xl p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h2 className="brand-heading text-sm font-semibold">Create New Bowtie</h2>
+        <span className="brand-accent-chip rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide">
+          start in minutes
+        </span>
+      </div>
       <div className="mt-3 grid gap-2 md:grid-cols-2">
         <input
           required
           value={title}
           onChange={(event) => setTitle(event.target.value)}
           placeholder="Title"
-          className="rounded border border-[#9CA3AF] bg-white px-3 py-2 text-sm"
+          className="brand-input rounded-lg px-3 py-2 text-sm"
         />
         <select
           value={industry}
           onChange={(event) => setIndustry(event.target.value)}
-          className="rounded border border-[#9CA3AF] bg-white px-3 py-2 text-sm"
+          className="brand-select rounded-lg px-3 py-2 text-sm"
         >
           {INDUSTRY_OPTIONS.map((option) => (
             <option key={option}>{option}</option>
@@ -63,20 +68,20 @@ export function CreateProjectForm() {
         value={topEvent}
         onChange={(event) => setTopEvent(event.target.value)}
         placeholder="Top Event (required)"
-        className="mt-2 w-full rounded border border-[#9CA3AF] bg-white px-3 py-2 text-sm"
+        className="brand-input mt-2 w-full rounded-lg px-3 py-2 text-sm"
       />
 
       <textarea
         value={contextNotes}
         onChange={(event) => setContextNotes(event.target.value)}
         placeholder="Optional context notes (site/process/asset)"
-        className="mt-2 h-24 w-full rounded border border-[#9CA3AF] bg-white px-3 py-2 text-sm"
+        className="brand-textarea mt-2 h-24 w-full rounded-lg px-3 py-2 text-sm"
       />
 
       <select
         value={templateId}
         onChange={(event) => setTemplateId(event.target.value)}
-        className="mt-2 w-full rounded border border-[#9CA3AF] bg-white px-3 py-2 text-sm"
+        className="brand-select mt-2 w-full rounded-lg px-3 py-2 text-sm"
       >
         <option value="general-starter">Template: General starter</option>
         {TEMPLATES.filter((template) => template.id !== "general-starter").map((template) => (
@@ -86,7 +91,7 @@ export function CreateProjectForm() {
         ))}
       </select>
 
-      <button disabled={loading} className="brand-btn-primary mt-2 rounded px-4 py-2 text-sm font-semibold">
+      <button disabled={loading} className="brand-btn-primary mt-2 rounded-lg px-4 py-2 text-sm font-semibold">
         {loading ? "Creating..." : "Create Project"}
       </button>
 

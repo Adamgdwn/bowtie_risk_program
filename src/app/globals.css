@@ -22,7 +22,10 @@
 }
 
 body {
-  background: var(--background);
+  background:
+    radial-gradient(1200px 400px at 80% -10%, color-mix(in srgb, var(--brand-primary) 12%, transparent), transparent),
+    radial-gradient(900px 320px at 10% -20%, color-mix(in srgb, var(--brand-accent) 14%, transparent), transparent),
+    var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), sans-serif;
 }
@@ -35,6 +38,7 @@ body {
 .brand-card {
   background: var(--surface);
   border: 1px solid var(--chrome);
+  box-shadow: 0 12px 30px -24px color-mix(in srgb, var(--brand-heading) 45%, transparent);
 }
 
 .brand-panel {
@@ -54,17 +58,21 @@ body {
   background: var(--brand-primary);
   color: #fff;
   border: 1px solid var(--brand-primary);
+  box-shadow: 0 8px 18px -12px color-mix(in srgb, var(--brand-primary) 85%, transparent);
+  transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease;
 }
 
 .brand-btn-primary:hover {
   background: var(--brand-primary-hover);
   border-color: var(--brand-primary-hover);
+  transform: translateY(-1px);
 }
 
 .brand-btn-secondary {
   background: var(--surface);
   color: var(--brand-heading);
   border: 1px solid var(--chrome);
+  transition: border-color 120ms ease, color 120ms ease, background-color 120ms ease;
 }
 
 .brand-btn-secondary:hover {
@@ -76,4 +84,43 @@ body {
   background: color-mix(in srgb, var(--brand-accent) 16%, white);
   border: 1px solid color-mix(in srgb, var(--brand-accent) 45%, white);
   color: color-mix(in srgb, var(--brand-heading) 85%, black);
+}
+
+.brand-nav-shell {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--surface) 95%, transparent),
+    color-mix(in srgb, var(--surface) 88%, transparent)
+  );
+  backdrop-filter: blur(8px);
+}
+
+.brand-nav-link {
+  color: color-mix(in srgb, var(--brand-heading) 76%, white);
+  transition: color 120ms ease;
+}
+
+.brand-nav-link:hover {
+  color: var(--brand-primary);
+}
+
+.brand-input,
+.brand-select,
+.brand-textarea {
+  border: 1px solid var(--chrome);
+  background: color-mix(in srgb, var(--surface) 88%, white);
+  color: var(--brand-heading);
+}
+
+.brand-input:focus,
+.brand-select:focus,
+.brand-textarea:focus {
+  outline: none;
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-primary) 18%, transparent);
+}
+
+.brand-stat-pill {
+  background: color-mix(in srgb, var(--panel) 58%, white);
+  border: 1px solid color-mix(in srgb, var(--chrome) 72%, white);
 }
