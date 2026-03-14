@@ -1253,6 +1253,7 @@ export function BowtieEditor({
     graphEdges: Edge[] = edges,
   ) => {
     const nodeMap = new Map(graphNodes.map((node) => [node.id, node]));
+    const rootIdSet = new Set(rootIds);
     const incoming = new Map<string, string[]>();
     const outgoing = new Map<string, string[]>();
 
@@ -1266,6 +1267,15 @@ export function BowtieEditor({
       if (!node) return [];
 
       if (node.data.type === "top_event") {
+        const hasAlternateTopEvent = graphNodes.some(
+          (otherNode) =>
+            otherNode.id !== nodeId &&
+            !rootIdSet.has(otherNode.id) &&
+            otherNode.data.type === "top_event",
+        );
+        if (hasAlternateTopEvent) {
+          return [];
+        }
         return Array.from(new Set([...(incoming.get(nodeId) ?? []), ...(outgoing.get(nodeId) ?? [])]));
       }
       if (node.data.type === "threat") {
@@ -1316,6 +1326,9 @@ export function BowtieEditor({
     const selectedNodeSet = new Set(selectedNodeIds);
     const deletedNodeIds = collectCascadeDeleteNodeIds(selectedNodeIds);
     const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+    const survivingTopEvents = nodes.filter(
+      (node) => node.data.type === "top_event" && !deletedNodeIds.has(node.id),
+    );
     const reconnectEdges: Edge[] = [];
     const reconnectKeys = new Set<string>();
 
@@ -1333,6 +1346,55 @@ export function BowtieEditor({
           edge.source === rootId &&
           !deletedNodeIds.has(edge.target),
       );
+
+      if (rootNode.data.type === "top_event" && survivingTopEvents.length > 0) {
+        const replacementTopEvent = [...survivingTopEvents].sort(
+          (left, right) =>
+            Math.abs(left.position.y - rootNode.position.y) - Math.abs(right.position.y - rootNode.position.y),
+        )[0];
+
+        if (!replacementTopEvent) {
+          continue;
+        }
+
+        for (const incomingEdge of survivingIncoming) {
+          const sourceNode = nodeMap.get(incomingEdge.source);
+          if (!sourceNode || !isLogicalConnectionAllowed(sourceNode.data.type, replacementTopEvent.data.type)) {
+            continue;
+          }
+          const key = `${sourceNode.id}:${replacementTopEvent.id}`;
+          if (reconnectKeys.has(key)) continue;
+          const alreadyExists = edges.some(
+            (edge) =>
+              edge.source === sourceNode.id &&
+              edge.target === replacementTopEvent.id &&
+              !selectedEdgeIds.includes(edge.id),
+          );
+          if (alreadyExists) continue;
+          reconnectKeys.add(key);
+          reconnectEdges.push(buildEdge(sourceNode, replacementTopEvent));
+        }
+
+        for (const outgoingEdge of survivingOutgoing) {
+          const targetNode = nodeMap.get(outgoingEdge.target);
+          if (!targetNode || !isLogicalConnectionAllowed(replacementTopEvent.data.type, targetNode.data.type)) {
+            continue;
+          }
+          const key = `${replacementTopEvent.id}:${targetNode.id}`;
+          if (reconnectKeys.has(key)) continue;
+          const alreadyExists = edges.some(
+            (edge) =>
+              edge.source === replacementTopEvent.id &&
+              edge.target === targetNode.id &&
+              !selectedEdgeIds.includes(edge.id),
+          );
+          if (alreadyExists) continue;
+          reconnectKeys.add(key);
+          reconnectEdges.push(buildEdge(replacementTopEvent, targetNode));
+        }
+
+        continue;
+      }
 
       for (const incomingEdge of survivingIncoming) {
         const sourceNode = nodeMap.get(incomingEdge.source);
@@ -1575,6 +1637,16 @@ export function BowtieEditor({
   function addNode(type: NodeType) {
     if (readOnly) {
       return;
+    }
+    if (type === "top_event") {
+      const existingTopEvent = nodes.find((node) => node.data.type === "top_event");
+      if (existingTopEvent) {
+        setSelectedId(existingTopEvent.id);
+        setSelectedNodeIds([existingTopEvent.id]);
+        setSelectedEdgeIds([]);
+        pushToast("Only one top event is allowed.");
+        return;
+      }
     }
     const meta = NODE_TYPE_META[type];
     const nodeId = uuid();
