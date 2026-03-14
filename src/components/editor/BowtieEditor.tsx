@@ -754,6 +754,7 @@ export function BowtieEditor({
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [starterGuideDismissed, setStarterGuideDismissed] = useState(false);
+  const [starterGuideExpanded, setStarterGuideExpanded] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
   const reactFlowRef = useRef<ReactFlowInstance | null>(null);
   const autosaveRef = useRef<number | undefined>(undefined);
@@ -863,6 +864,7 @@ export function BowtieEditor({
   }, [nodes]);
   const viewportStorageKey = useMemo(() => `bowtie:viewport:${projectId}`, [projectId]);
   const connectorStyleStorageKey = useMemo(() => `bowtie:connector-style:${projectId}`, [projectId]);
+  const starterGuideExpandedStorageKey = useMemo(() => `bowtie:starter-guide-expanded:${projectId}`, [projectId]);
   const canUndo = historyTick >= 0 && historyRef.current.past.length > 1;
   const canRedo = historyTick >= 0 && historyRef.current.future.length > 0;
   const laneNodeCounts = useMemo(
@@ -875,7 +877,8 @@ export function BowtieEditor({
     }),
     [nodes],
   );
-  const showStarterGuide = !readOnly && !starterGuideDismissed && guidedCompletionCount < guidedSteps.length;
+  const guideComplete = guidedCompletionCount >= guidedSteps.length;
+  const showStarterGuide = !readOnly && !starterGuideDismissed && !guideComplete;
 
   const pushToast = useCallback((text: string) => {
     const id = uuid();
@@ -897,6 +900,22 @@ export function BowtieEditor({
     if (typeof window === "undefined") return;
     window.localStorage.setItem(connectorStyleStorageKey, connectorStyle);
   }, [connectorStyle, connectorStyleStorageKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const storedExpanded = window.localStorage.getItem(starterGuideExpandedStorageKey);
+    if (storedExpanded === "true") {
+      setStarterGuideExpanded(true);
+    }
+    if (storedExpanded === "false") {
+      setStarterGuideExpanded(false);
+    }
+  }, [starterGuideExpandedStorageKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(starterGuideExpandedStorageKey, starterGuideExpanded ? "true" : "false");
+  }, [starterGuideExpanded, starterGuideExpandedStorageKey]);
   const onWorksheetTopEventChange = useCallback(
     (title: string) => {
       const normalized = title.trim();
@@ -2283,96 +2302,102 @@ export function BowtieEditor({
     <div className="relative flex h-[calc(100vh-4rem)] w-full flex-col">
       {!readOnly ? (
         showStarterGuide ? (
-          <div className="border-b border-[#9CA3AF] bg-white px-4 py-2.5">
-            <div className="space-y-2">
-              <div className="grid gap-2 xl:grid-cols-[260px_minmax(0,1fr)_auto]">
-                <div className="rounded border border-[#9CA3AF]/70 bg-[#F7F8FA] px-4 py-2.5">
-                  <div className="flex items-center gap-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#325D88]">Starter Guide</p>
-                    <span className="rounded-full border border-[#9CA3AF] bg-white px-2.5 py-0.5 text-[11px] font-semibold text-[#1F2933]/75">
-                      {guidedCompletionCount}/{guidedSteps.length}
-                    </span>
-                  </div>
-                  <p className="mt-1.5 text-sm font-medium leading-5 text-[#1F2933]">
-                    Build the core bowtie in a clean sequence.
-                  </p>
-                </div>
-                {recommendedStep ? (
-                  <div className="rounded border border-[#D4A547]/60 bg-[#f8f1df] px-4 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]">
-                    <div className="flex h-full items-center justify-between gap-4">
-                      <div className="min-w-0">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#7a5b10]">
-                          Recommended Next Action
-                        </p>
-                        <p className="mt-1 text-base font-semibold leading-6 text-[#1F2933]">{recommendedStep.title}</p>
-                        <p className="mt-0.5 text-sm leading-5 text-[#1F2933]/75">{recommendedStep.detail}</p>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        {viewMode !== recommendedStep.preferredView ? (
-                          <button
-                            onClick={() => setViewMode(recommendedStep.preferredView)}
-                            className="rounded bg-[#325D88] px-3 py-2 text-xs font-semibold uppercase tracking-wider text-white"
-                          >
-                            {recommendedStep.preferredView === "worksheet" ? "Open Worksheet" : "Open Canvas"}
-                          </button>
-                        ) : (
-                          <span className="rounded bg-[#e8eef7] px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#325D88]">
-                            Right Workspace
-                          </span>
-                        )}
-                        <button
-                          onClick={() => setStarterGuideDismissed(true)}
-                          className="rounded border border-[#9CA3AF] bg-white px-3 py-2 text-xs font-semibold uppercase tracking-wider text-[#1F2933]/70"
-                        >
-                          Hide
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="rounded border border-[#9CA3AF]/70 bg-[#F7F8FA] px-4 py-2.5" />
-                )}
-                <div className="hidden xl:flex xl:items-center xl:justify-end">
-                  <p className="max-w-[220px] text-right text-[11px] leading-5 text-[#1F2933]/60">
-                    Complete the essentials first, then deepen ownership, notes, and export detail.
-                  </p>
-                </div>
+          <div className="border-b border-[#9CA3AF] bg-white px-4 py-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-3 rounded border border-[#9CA3AF]/70 bg-[#F7F8FA] px-3 py-1.5">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#325D88]">Starter Guide</p>
+                <span className="rounded-full border border-[#9CA3AF] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#1F2933]/75">
+                  {guidedCompletionCount}/{guidedSteps.length}
+                </span>
               </div>
-              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
-                {guidedSteps.map((step, index) => (
-                  <div key={step.id} className="rounded border border-[#9CA3AF]/70 bg-[#F5F3F0] px-3 py-2.5">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#1F2933]/45">
-                          Step {index + 1}
-                        </p>
-                        <p className="mt-1 text-sm font-semibold leading-5 text-[#1F2933]">{step.title}</p>
-                      </div>
-                      <span
-                        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] ${
-                          step.done ? "bg-[#d8eadf] text-[#235f34]" : "bg-[#e2e8f0] text-[#475569]"
-                        }`}
+              {recommendedStep ? (
+                <div className="min-w-0 flex-1 rounded border border-[#D4A547]/60 bg-[#f8f1df] px-3 py-1.5">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#7a5b10]">
+                      Recommended Next Action
+                    </p>
+                    <p className="min-w-0 flex-1 truncate text-sm font-semibold text-[#1F2933]">
+                      {recommendedStep.title}
+                    </p>
+                    {viewMode !== recommendedStep.preferredView ? (
+                      <button
+                        onClick={() => setViewMode(recommendedStep.preferredView)}
+                        className="rounded bg-[#325D88] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-white"
                       >
-                        {step.done ? "Done" : "Next"}
+                        {recommendedStep.preferredView === "worksheet" ? "Open Worksheet" : "Open Canvas"}
+                      </button>
+                    ) : (
+                      <span className="rounded bg-[#e8eef7] px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#325D88]">
+                        Right Workspace
                       </span>
-                    </div>
+                    )}
                   </div>
-                ))}
+                </div>
+              ) : null}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setStarterGuideExpanded((current) => !current)}
+                  className="rounded border border-[#9CA3AF] bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#1F2933]/70"
+                >
+                  {starterGuideExpanded ? "Collapse" : "Details"}
+                </button>
+                <button
+                  onClick={() => setStarterGuideDismissed(true)}
+                  className="rounded border border-[#9CA3AF] bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#1F2933]/70"
+                >
+                  Hide
+                </button>
               </div>
             </div>
+            {starterGuideExpanded ? (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <p className="mr-2 text-[11px] text-[#1F2933]/60">
+                  Complete the essentials first, then deepen ownership, notes, and export detail.
+                </p>
+                {guidedSteps.map((step, index) => (
+                  <div
+                    key={step.id}
+                    className={`flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] ${
+                      step.done
+                        ? "border-[#b8d7c2] bg-[#eef8f1] text-[#235f34]"
+                        : recommendedStep?.id === step.id
+                          ? "border-[#D4A547]/70 bg-[#f8f1df] text-[#7a5b10]"
+                          : "border-[#D6D9DE] bg-[#F7F8FA] text-[#52606D]"
+                    }`}
+                  >
+                    <span className="font-semibold uppercase tracking-[0.16em]">{index + 1}</span>
+                    <span className="font-medium">{step.title}</span>
+                    <span className="rounded-full bg-white/80 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em]">
+                      {step.done ? "Done" : recommendedStep?.id === step.id ? "Next" : "Open"}
+                    </span>
+                  </div>
+                ))}
+                {recommendedStep ? (
+                  <p className="w-full text-[11px] leading-5 text-[#1F2933]/65 xl:ml-auto xl:w-auto">
+                    {recommendedStep.detail}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         ) : (
           <div className="border-b border-[#9CA3AF] bg-white px-4 py-2">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-[#325D88]">Core Structure Ready</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-[#325D88]">
+                  {guideComplete ? "Core Structure Ready" : "Starter Guide Hidden"}
+                </p>
                 <p className="mt-1 text-xs text-[#1F2933]/75">
-                  Your bowtie has the main structure in place. Use the worksheet to add notes and ownership details,
-                  or stay on the canvas to refine barriers and export.
+                  {guideComplete
+                    ? "Your bowtie has the main structure in place. Use the worksheet for notes and ownership, or stay on the canvas to refine and export."
+                    : "The starter guide is hidden. Bring it back any time if you want a recommended build sequence."}
                 </p>
               </div>
               <button
-                onClick={() => setStarterGuideDismissed(false)}
+                onClick={() => {
+                  setStarterGuideDismissed(false);
+                  setStarterGuideExpanded(true);
+                }}
                 className="rounded border border-[#9CA3AF] px-3 py-2 text-xs font-semibold text-[#1F2933]/70"
               >
                 Show Guide
