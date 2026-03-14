@@ -19,6 +19,26 @@ interface BowtieNodeUiData extends BowtieNodeData {
   onToggleCollapse?: (nodeId: string, side: "left" | "right") => void;
 }
 
+const EMPTY_NODE_HELP: Record<NodeType, string> = {
+  top_event: "Name the loss-of-control moment.",
+  threat: "Name a credible cause.",
+  preventive_barrier: "Name the control that stops it.",
+  consequence: "Name the direct outcome.",
+  mitigative_barrier: "Name the control that limits harm.",
+  escalation_factor: "Name what could weaken the barrier.",
+  escalation_factor_control: "Name the control for that weakness.",
+};
+
+function hasMeaningfulTitle(type: NodeType, title?: string) {
+  const normalized = title?.trim().toLowerCase() ?? "";
+  if (!normalized || normalized === "untitled") {
+    return false;
+  }
+
+  const generic = NODE_TYPE_META[type].label.toLowerCase();
+  return normalized !== generic;
+}
+
 export default function BowtieNode({ id, data, selected }: NodeProps<BowtieNodeUiData>) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [openMenu, setOpenMenu] = useState<"left" | "right" | null>(null);
@@ -41,6 +61,7 @@ export default function BowtieNode({ id, data, selected }: NodeProps<BowtieNodeU
           ? "#fff8e8"
           : "#f0fdf4";
   const shellLabel = isEscalation ? supportLabel : meta.label;
+  const showInlineHelp = !hasMeaningfulTitle(data.type, data.title);
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -177,6 +198,15 @@ export default function BowtieNode({ id, data, selected }: NodeProps<BowtieNodeU
         >
           {data.title || "Untitled"}
         </div>
+        {showInlineHelp ? (
+          <div
+            className={`relative mt-2 text-zinc-500 ${
+              isBarrierShell ? "text-center text-[10px] leading-[1.2]" : "text-xs leading-snug"
+            }`}
+          >
+            {EMPTY_NODE_HELP[data.type]}
+          </div>
+        ) : null}
         {data.description && !isBarrierShell ? (
           <div className="mt-1 break-words whitespace-pre-wrap text-xs leading-snug text-zinc-600">
             {data.description}

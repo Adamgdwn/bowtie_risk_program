@@ -42,6 +42,11 @@ interface ClipboardSnapshot {
   edges: Edge[];
 }
 
+interface ToastMessage {
+  id: string;
+  text: string;
+}
+
 type ExportFormat = "png" | "pdf";
 type ExportScope = "canvas" | "worksheet" | "both";
 type ExportSize = "small" | "medium" | "large";
@@ -746,7 +751,11 @@ export function BowtieEditor({
   const [exporting, setExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const [historyTick, setHistoryTick] = useState(0);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+  const [starterGuideDismissed, setStarterGuideDismissed] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
+  const reactFlowRef = useRef<ReactFlowInstance | null>(null);
   const autosaveRef = useRef<number | undefined>(undefined);
   const didHydrateTopEventRef = useRef(false);
   const isApplyingHistoryRef = useRef(false);
@@ -785,7 +794,6 @@ export function BowtieEditor({
     [guidedSteps],
   );
   const guidedCompletionCount = guidedSteps.filter((step) => step.done).length;
-  const showStarterGuide = !readOnly && guidedCompletionCount < guidedSteps.length;
   const {
     indexByNodeId: preventiveBarrierIndexByNodeId,
     barrierIdsByThreatId,
@@ -854,8 +862,41 @@ export function BowtieEditor({
     return { laneTop: top, laneHeight: bottom - top };
   }, [nodes]);
   const viewportStorageKey = useMemo(() => `bowtie:viewport:${projectId}`, [projectId]);
+  const connectorStyleStorageKey = useMemo(() => `bowtie:connector-style:${projectId}`, [projectId]);
   const canUndo = historyTick >= 0 && historyRef.current.past.length > 1;
   const canRedo = historyTick >= 0 && historyRef.current.future.length > 0;
+  const laneNodeCounts = useMemo(
+    () => ({
+      threats: nodes.filter((node) => node.data.type === "threat").length,
+      preventiveBarriers: nodes.filter((node) => node.data.type === "preventive_barrier").length,
+      topEvent: nodes.filter((node) => node.data.type === "top_event").length,
+      mitigativeBarriers: nodes.filter((node) => node.data.type === "mitigative_barrier").length,
+      consequences: nodes.filter((node) => node.data.type === "consequence").length,
+    }),
+    [nodes],
+  );
+  const showStarterGuide = !readOnly && !starterGuideDismissed && guidedCompletionCount < guidedSteps.length;
+
+  const pushToast = useCallback((text: string) => {
+    const id = uuid();
+    setToasts((existing) => [...existing, { id, text }]);
+    window.setTimeout(() => {
+      setToasts((existing) => existing.filter((toast) => toast.id !== id));
+    }, 2400);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const storedConnectorStyle = window.localStorage.getItem(connectorStyleStorageKey);
+    if (storedConnectorStyle === "rounded" || storedConnectorStyle === "angled") {
+      setConnectorStyle(storedConnectorStyle);
+    }
+  }, [connectorStyleStorageKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(connectorStyleStorageKey, connectorStyle);
+  }, [connectorStyle, connectorStyleStorageKey]);
   const onWorksheetTopEventChange = useCallback(
     (title: string) => {
       const normalized = title.trim();
@@ -954,6 +995,7 @@ export function BowtieEditor({
   }, [packedConsequenceYByNodeId, packedThreatYByNodeId, setNodes]);
   const initializeViewport = useCallback(
     (instance: ReactFlowInstance) => {
+      reactFlowRef.current = instance;
       let targetViewport = DEFAULT_VIEWPORT;
       if (typeof window !== "undefined" && nodes.length > 0) {
         const raw = window.localStorage.getItem(viewportStorageKey);
@@ -979,12 +1021,29 @@ export function BowtieEditor({
     [nodes.length, viewportStorageKey],
   );
 
+  const fitToDiagram = useCallback(() => {
+    reactFlowRef.current?.fitView({ padding: 0.16, duration: 320, includeHiddenNodes: false });
+  }, []);
+
+  const centerTopEvent = useCallback(() => {
+    const topEventNode = nodes.find((node) => node.data.type === "top_event");
+    if (!topEventNode || !reactFlowRef.current) {
+      return;
+    }
+    const footprint = NODE_FOOTPRINTS.top_event;
+    reactFlowRef.current.setCenter(
+      topEventNode.position.x + footprint.width / 2,
+      topEventNode.position.y + footprint.height / 2,
+      { zoom: 0.9, duration: 320 },
+    );
+  }, [nodes]);
+
   const warnings = useMemo(
     () => validateBowtie(nodes, edges).map((item) => item.message),
     [nodes, edges],
   );
 
-  const saveCanvas = useCallback(async () => {
+  const saveCanvas = useCallback(async (options?: { silent?: boolean }) => {
     if (readOnly) {
       return;
     }
@@ -1001,8 +1060,12 @@ export function BowtieEditor({
     if (typeof window !== "undefined") {
       window.localStorage.setItem(viewportStorageKey, JSON.stringify(viewport));
     }
+    setLastSavedAt(Date.now());
+    if (!options?.silent) {
+      pushToast("Canvas saved.");
+    }
     setSaving(false);
-  }, [edges, nodes, projectId, readOnly, viewport, viewportStorageKey]);
+  }, [edges, nodes, projectId, pushToast, readOnly, viewport, viewportStorageKey]);
 
   useEffect(() => {
     if (readOnly) {
@@ -1010,7 +1073,7 @@ export function BowtieEditor({
     }
     window.clearTimeout(autosaveRef.current);
     autosaveRef.current = window.setTimeout(() => {
-      void saveCanvas();
+      void saveCanvas({ silent: true });
     }, 1200);
     return () => window.clearTimeout(autosaveRef.current);
   }, [edges, nodes, readOnly, saveCanvas]);
@@ -1324,7 +1387,10 @@ export function BowtieEditor({
     setSelectedNodeIds([]);
     setSelectedEdgeIds([]);
     setSelectedId(null);
-  }, [collectCascadeDeleteNodeIds, edges, nodes, selectedEdgeIds, selectedNodeIds, setEdges, setNodes]);
+    pushToast(
+      `Deleted ${deletedNodeIds.size} node${deletedNodeIds.size === 1 ? "" : "s"}${reconnectEdges.length > 0 ? " and re-linked the path." : "."}`,
+    );
+  }, [collectCascadeDeleteNodeIds, edges, nodes, pushToast, selectedEdgeIds, selectedNodeIds, setEdges, setNodes]);
 
   const undo = useCallback(() => {
     const history = historyRef.current;
@@ -1436,7 +1502,8 @@ export function BowtieEditor({
     setSelectedEdgeIds(pastedEdges.map((edge) => edge.id));
     setSelectedId(pastedNodes[0]?.id ?? null);
     pasteCountRef.current += 1;
-  }, [mitigativeChainIndexByNodeId, mitigativeColumns, setEdges, setNodes]);
+    pushToast(`Pasted ${pastedNodes.length} node${pastedNodes.length === 1 ? "" : "s"}.`);
+  }, [mitigativeChainIndexByNodeId, mitigativeColumns, pushToast, setEdges, setNodes]);
 
   const cutSelection = useCallback(() => {
     const didCopy = copySelection();
@@ -1510,6 +1577,7 @@ export function BowtieEditor({
       return;
     }
     const meta = NODE_TYPE_META[type];
+    const nodeId = uuid();
     const supportLane = supportLaneForNode(selectedNode, mitigativeColumns);
     const supportAnchorX =
       type === "escalation_factor" || type === "escalation_factor_control"
@@ -1570,7 +1638,7 @@ export function BowtieEditor({
     setNodes((existing) => [
       ...existing,
       {
-        id: uuid(),
+        id: nodeId,
         type: "bowtieNode",
         position,
         data: {
@@ -1587,6 +1655,10 @@ export function BowtieEditor({
         },
       },
     ]);
+    setSelectedId(nodeId);
+    setSelectedNodeIds([nodeId]);
+    setSelectedEdgeIds([]);
+    pushToast(`${meta.label} added.`);
   }
 
   function onUpdateNode(nodeId: string, patch: Partial<BowtieNodeData>) {
@@ -1817,6 +1889,13 @@ export function BowtieEditor({
 
     setNodes(draftNodes);
     setEdges(draftEdges);
+    const insertedIds = draftNodes
+      .slice(nodes.length)
+      .map((node) => node.id);
+    setSelectedNodeIds(insertedIds);
+    setSelectedId(insertedIds[0] ?? null);
+    setSelectedEdgeIds([]);
+    pushToast(`Inserted ${insertedIds.length} suggestion${insertedIds.length === 1 ? "" : "s"}.`);
   }
 
   const quickAddNode = useCallback((parentId: string, side: "left" | "right", childType: NodeType) => {
@@ -1842,7 +1921,11 @@ export function BowtieEditor({
           : existing;
       return [...kept, ...insertion.nextEdges];
     });
-  }, [buildSuggestedInsertion, edges, nodes, readOnly, setEdges, setNodes]);
+    setSelectedId(insertion.newNode.id);
+    setSelectedNodeIds([insertion.newNode.id]);
+    setSelectedEdgeIds([]);
+    pushToast(`${NODE_TYPE_META[childType].label} added.`);
+  }, [buildSuggestedInsertion, edges, nodes, pushToast, readOnly, setEdges, setNodes]);
 
   const toggleCollapse = useCallback((nodeId: string, side: "left" | "right") => {
     if (readOnly) return;
@@ -2112,6 +2195,10 @@ export function BowtieEditor({
         if (Array.isArray(parsed.nodes) && Array.isArray(parsed.edges)) {
           setNodes(parsed.nodes);
           setEdges(parsed.edges);
+          setSelectedId(parsed.nodes[0]?.id ?? null);
+          setSelectedNodeIds(parsed.nodes[0]?.id ? [parsed.nodes[0].id] : []);
+          setSelectedEdgeIds([]);
+          pushToast("Canvas imported.");
         }
       } catch {
         // Ignore invalid JSON uploads in MVP.
@@ -2121,7 +2208,7 @@ export function BowtieEditor({
   }
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] w-full">
+    <div className="relative flex h-[calc(100vh-4rem)] w-full">
       <div className="w-64 border-r border-[#9CA3AF] bg-[#E5E7EB] p-3">
         {readOnly ? (
           <div className="space-y-4">
@@ -2170,9 +2257,17 @@ export function BowtieEditor({
                       Follow the recommended order until the core bowtie structure is in place.
                     </p>
                   </div>
-                  <span className="rounded-full border border-[#9CA3AF] px-2 py-1 text-[11px] font-semibold text-[#1F2933]/75">
-                    {guidedCompletionCount}/{guidedSteps.length}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full border border-[#9CA3AF] px-2 py-1 text-[11px] font-semibold text-[#1F2933]/75">
+                      {guidedCompletionCount}/{guidedSteps.length}
+                    </span>
+                    <button
+                      onClick={() => setStarterGuideDismissed(true)}
+                      className="rounded border border-[#9CA3AF] px-2 py-1 text-[11px] font-semibold text-[#1F2933]/70"
+                    >
+                      Hide
+                    </button>
+                  </div>
                 </div>
 
                 {recommendedStep ? (
@@ -2264,6 +2359,20 @@ export function BowtieEditor({
                   Redo
                 </button>
               </div>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <button
+                  onClick={fitToDiagram}
+                  className="rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs font-semibold text-[#1F2933]"
+                >
+                  Fit Diagram
+                </button>
+                <button
+                  onClick={centerTopEvent}
+                  className="rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs font-semibold text-[#1F2933]"
+                >
+                  Center Top Event
+                </button>
+              </div>
               <select
                 value={connectorStyle}
                 onChange={(event) => setConnectorStyle(event.target.value as ConnectorStyle)}
@@ -2272,6 +2381,9 @@ export function BowtieEditor({
                 <option value="rounded">Connectors: Rounded</option>
                 <option value="angled">Connectors: Hard Angles</option>
               </select>
+              <p className="mt-2 text-[11px] text-[#1F2933]/65">
+                Shortcuts: `Ctrl/Cmd+Z` undo, `Shift+Ctrl/Cmd+Z` redo, `Delete` remove, `Ctrl/Cmd+V` paste.
+              </p>
             </div>
 
             <h3 className="text-sm font-semibold text-[#1F2933]">Palette</h3>
@@ -2304,9 +2416,16 @@ export function BowtieEditor({
             </div>
 
             <div className="mt-4 space-y-2">
-              <button onClick={saveCanvas} className="w-full rounded bg-[#325D88] px-2 py-1 text-xs text-white">
+              <button onClick={() => void saveCanvas()} className="w-full rounded bg-[#325D88] px-2 py-1 text-xs text-white">
                 {saving ? "Saving..." : "Save Now"}
               </button>
+              <p className="text-[11px] text-[#1F2933]/65">
+                {saving
+                  ? "Saving changes..."
+                  : lastSavedAt
+                    ? `Saved ${new Date(lastSavedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
+                    : "Changes autosave after a short pause."}
+              </p>
               <button
                 onClick={deleteSelected}
                 disabled={selectedNodeIds.length === 0 && selectedEdgeIds.length === 0}
@@ -2412,7 +2531,15 @@ export function BowtieEditor({
                       className="flex items-center justify-center px-2 text-center text-[11px] font-semibold uppercase tracking-wider text-[#1F2933]"
                       style={{ width: laneWidths[index] }}
                     >
-                      {lane.label}
+                      {index === 0
+                        ? `${lane.label} (${laneNodeCounts.threats})`
+                        : index === 1
+                          ? `${lane.label} (${laneNodeCounts.preventiveBarriers})`
+                          : index === 2
+                            ? `${lane.label} (${laneNodeCounts.topEvent})`
+                            : index === 3
+                              ? `${lane.label} (${laneNodeCounts.mitigativeBarriers})`
+                              : `${lane.label} (${laneNodeCounts.consequences})`}
                     </div>
                   ))}
                 </div>
@@ -2462,6 +2589,19 @@ export function BowtieEditor({
           />
         )}
       </div>
+
+      {toasts.length > 0 ? (
+        <div className="pointer-events-none absolute bottom-4 right-4 z-40 space-y-2">
+          {toasts.map((toast) => (
+            <div
+              key={toast.id}
+              className="rounded-lg border border-[#9CA3AF] bg-white/95 px-3 py-2 text-xs font-semibold text-[#1F2933] shadow-lg backdrop-blur"
+            >
+              {toast.text}
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       {readOnly ? null : viewMode === "canvas" ? (
         <InspectorPanel

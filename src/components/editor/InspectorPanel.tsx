@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Edge, Node } from "reactflow";
 import { BowtieNodeData, NodeType } from "@/lib/types/bowtie";
 
@@ -65,11 +65,21 @@ export function InspectorPanel({
   onUpdateNode,
   onInsertSuggestions,
 }: Props) {
+  const titleInputRef = useRef<HTMLInputElement>(null);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [hint, setHint] = useState("");
   const [loading, setLoading] = useState(false);
   const [lastAction, setLastAction] = useState("");
+
+  useEffect(() => {
+    if (!selectedNode) return;
+    const frame = requestAnimationFrame(() => {
+      titleInputRef.current?.focus();
+      titleInputRef.current?.select();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [selectedNode]);
 
   const actions = useMemo(() => {
     if (!selectedNode) return [];
@@ -171,6 +181,7 @@ export function InspectorPanel({
 
       <label className="mt-3 block text-xs font-semibold text-[#1F2933]">Title</label>
       <input
+        ref={titleInputRef}
         value={selectedNode.data?.title ?? ""}
         onChange={(event) => onUpdateNode(selectedNode.id, { title: event.target.value })}
         className="mt-1 w-full rounded border border-[#9CA3AF] bg-white px-2 py-1 text-sm"
