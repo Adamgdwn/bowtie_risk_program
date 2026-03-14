@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { Handle, NodeProps, Position } from "reactflow";
 import { NODE_TYPE_META } from "@/lib/constants";
 import { BowtieNodeData, NodeType } from "@/lib/types/bowtie";
@@ -19,6 +20,8 @@ interface BowtieNodeUiData extends BowtieNodeData {
 }
 
 export default function BowtieNode({ id, data, selected }: NodeProps<BowtieNodeUiData>) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [openMenu, setOpenMenu] = useState<"left" | "right" | null>(null);
   const meta = NODE_TYPE_META[data.type ?? "threat"];
   const leftOptions = data.quickAddLeft ?? [];
   const rightOptions = data.quickAddRight ?? [];
@@ -26,13 +29,32 @@ export default function BowtieNode({ id, data, selected }: NodeProps<BowtieNodeU
     data.type === "escalation_factor" || data.type === "escalation_factor_control";
   const isBarrier =
     data.type === "preventive_barrier" || data.type === "mitigative_barrier";
+  const isBarrierShell = isBarrier || isEscalation;
   const supportLabel =
     data.supportLane === "mitigative" ? "Mitigative Support" : "Preventive Support";
-  const supportAccent = data.supportLane === "mitigative" ? "#0ea5e9" : "#f59e0b";
-  const supportBg = data.supportLane === "mitigative" ? "#f0f9ff" : "#fffbeb";
-  const barrierTint = data.type === "preventive_barrier" ? "#fff7e8" : "#ecfeff";
+  const shellTint =
+    data.type === "preventive_barrier"
+      ? "#fff8e8"
+      : data.type === "mitigative_barrier"
+        ? "#ecfeff"
+        : data.type === "escalation_factor"
+          ? "#fff8e8"
+          : "#f0fdf4";
+  const shellLabel = isEscalation ? supportLabel : meta.label;
+
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpenMenu(null);
+      }
+    }
+
+    window.addEventListener("mousedown", handlePointerDown);
+    return () => window.removeEventListener("mousedown", handlePointerDown);
+  }, []);
 
   function onAdd(side: "left" | "right", type: NodeType) {
+    setOpenMenu(null);
     data.onQuickAdd?.(id, side, type);
   }
 
@@ -40,100 +62,122 @@ export default function BowtieNode({ id, data, selected }: NodeProps<BowtieNodeU
     data.onToggleCollapse?.(id, side);
   }
 
-  return (
-    <div className="relative">
-      {leftOptions.length > 0 ? (
-        <div className="absolute -left-8 top-1/2 -translate-y-1/2">
-          <div className="flex flex-col items-center gap-1">
-            <button
-              type="button"
-              className="h-6 w-6 rounded-full border border-zinc-300 bg-white text-sm font-semibold text-zinc-800 shadow-sm"
-              title={`Add ${leftOptions[0].label} on left`}
-              onClick={() => onAdd("left", leftOptions[0].type)}
-            >
-              +
-            </button>
-            {data.canCollapseLeft ? (
-              <button
-                type="button"
-                className="h-5 w-5 rounded-full border border-zinc-300 bg-white text-[10px] font-bold text-zinc-700 shadow-sm"
-                title={data.collapsedLeft ? "Expand left branch" : "Collapse left branch"}
-                onClick={() => onToggle("left")}
-              >
-                {data.collapsedLeft ? "+" : "-"}
-              </button>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
+  function onOpenMenu(side: "left" | "right") {
+    if ((side === "left" ? leftOptions : rightOptions).length === 0) {
+      return;
+    }
+    setOpenMenu((current) => (current === side ? null : side));
+  }
 
-      {rightOptions.length > 0 ? (
-        <div className="absolute -right-8 top-1/2 -translate-y-1/2">
-          <div className="flex flex-col items-center gap-1">
+  function renderQuickAdd(side: "left" | "right", options: QuickAddOption[], canCollapse?: boolean) {
+    if (options.length === 0) {
+      return null;
+    }
+
+    const isLeft = side === "left";
+    const menuOpen = openMenu === side;
+
+    return (
+      <div className={`absolute ${isLeft ? "-left-10" : "-right-10"} top-1/2 z-20 -translate-y-1/2`}>
+        <div className="relative flex flex-col items-center gap-1">
+          <button
+            type="button"
+            className="h-7 w-7 rounded-full border border-zinc-300 bg-white text-sm font-semibold text-zinc-800 shadow-sm"
+            title={`Add ${options.length > 1 ? "node" : options[0].label} on ${side}`}
+            onClick={() => onOpenMenu(side)}
+          >
+            +
+          </button>
+          {canCollapse ? (
             <button
               type="button"
-              className="h-6 w-6 rounded-full border border-zinc-300 bg-white text-sm font-semibold text-zinc-800 shadow-sm"
-              title={`Add ${rightOptions[0].label} on right`}
-              onClick={() => onAdd("right", rightOptions[0].type)}
+              className="h-5 w-5 rounded-full border border-zinc-300 bg-white text-[10px] font-bold text-zinc-700 shadow-sm"
+              title={
+                side === "left"
+                  ? data.collapsedLeft
+                    ? "Expand left branch"
+                    : "Collapse left branch"
+                  : data.collapsedRight
+                    ? "Expand right branch"
+                    : "Collapse right branch"
+              }
+              onClick={() => onToggle(side)}
             >
-              +
+              {(side === "left" ? data.collapsedLeft : data.collapsedRight) ? "+" : "-"}
             </button>
-            {data.canCollapseRight ? (
-              <button
-                type="button"
-                className="h-5 w-5 rounded-full border border-zinc-300 bg-white text-[10px] font-bold text-zinc-700 shadow-sm"
-                title={data.collapsedRight ? "Expand right branch" : "Collapse right branch"}
-                onClick={() => onToggle("right")}
-              >
-                {data.collapsedRight ? "+" : "-"}
-              </button>
-            ) : null}
-          </div>
+          ) : null}
+          {menuOpen ? (
+            <div
+              className={`absolute top-1/2 w-40 -translate-y-1/2 rounded-xl border border-[#d9dde3] bg-white/95 p-1 shadow-xl backdrop-blur ${
+                isLeft ? "right-10" : "left-10"
+              }`}
+            >
+              {options.map((option) => (
+                <button
+                  key={`${side}-${option.type}-${option.label}`}
+                  type="button"
+                  className="block w-full rounded-lg px-3 py-2 text-left text-xs font-semibold text-zinc-700 hover:bg-[#f5f3ee]"
+                  onClick={() => onAdd(side, option.type)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
-      ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div ref={rootRef} className="relative">
+      {renderQuickAdd("left", leftOptions, data.canCollapseLeft)}
+      {renderQuickAdd("right", rightOptions, data.canCollapseRight)}
 
       <div
-        className={`${isBarrier ? "w-[120px] min-w-[120px] max-w-[120px] rounded-[28px] px-3 py-2" : "w-52 min-w-52 max-w-52 rounded-lg p-3"} border-2 bg-white shadow-sm`}
+        className={`relative ${
+          isBarrierShell
+            ? "w-[156px] min-w-[156px] max-w-[156px] rounded-[20px] px-4 pb-3 pt-4"
+            : "w-52 min-w-52 max-w-52 rounded-lg p-3"
+        } border-2 bg-white shadow-sm`}
         style={{
           borderColor: meta.color,
-          backgroundColor: isEscalation ? supportBg : isBarrier ? barrierTint : undefined,
-          borderLeftColor: isEscalation ? supportAccent : meta.color,
-          borderLeftWidth: isEscalation ? 6 : 2,
+          backgroundColor: isBarrierShell ? shellTint : undefined,
           boxShadow: selected ? `0 0 0 3px ${meta.color}33` : undefined,
         }}
       >
-        {isBarrier ? (
+        {isBarrierShell ? (
           <div
-            className="pointer-events-none absolute inset-x-3 top-1/2 h-[2px] -translate-y-1/2 rounded-full opacity-35"
-            style={{ backgroundColor: meta.color }}
+            className="pointer-events-none absolute left-1/2 top-[-10px] h-5 w-11 -translate-x-1/2 rounded-[10px] border border-zinc-400 bg-gradient-to-b from-white via-zinc-100 to-zinc-500 shadow-sm"
           />
         ) : null}
-        {isBarrier ? (
+        {isBarrierShell ? (
           <>
             <div
-              className="pointer-events-none absolute bottom-2 left-2 top-2 w-[5px] rounded-full opacity-80"
+              className="pointer-events-none absolute bottom-3 left-2 top-3 w-[4px] rounded-full opacity-90"
               style={{ backgroundColor: meta.color }}
             />
             <div
-              className="pointer-events-none absolute bottom-2 right-2 top-2 w-[5px] rounded-full opacity-80"
+              className="pointer-events-none absolute bottom-3 right-2 top-3 w-[4px] rounded-full opacity-90"
               style={{ backgroundColor: meta.color }}
             />
           </>
         ) : null}
-        {isEscalation ? (
-          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
-            {supportLabel}
-          </div>
-        ) : null}
-        <div className={`relative ${isBarrier ? "text-[9px] text-center" : "text-xs"} font-semibold uppercase tracking-wide text-zinc-500`}>
-          {isBarrier ? "Barrier" : meta.label}
+        <div
+          className={`relative font-semibold uppercase tracking-[0.16em] text-zinc-500 ${
+            isBarrierShell ? "text-center text-[9px]" : "text-xs"
+          }`}
+        >
+          {isBarrierShell ? shellLabel : meta.label}
         </div>
         <div
-          className={`relative mt-1 break-words whitespace-normal font-semibold text-zinc-900 ${isBarrier ? "text-center text-[12px] leading-[1.15]" : "text-sm leading-tight"}`}
+          className={`relative mt-2 break-words whitespace-normal font-semibold text-zinc-900 ${
+            isBarrierShell ? "text-center text-[13px] leading-[1.12]" : "text-sm leading-tight"
+          }`}
         >
           {data.title || "Untitled"}
         </div>
-        {data.description && !isBarrier ? (
+        {data.description && !isBarrierShell ? (
           <div className="mt-1 break-words whitespace-pre-wrap text-xs leading-snug text-zinc-600">
             {data.description}
           </div>

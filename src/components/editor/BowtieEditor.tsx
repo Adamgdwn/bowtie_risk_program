@@ -46,6 +46,7 @@ type ExportFormat = "png" | "pdf";
 type ExportScope = "canvas" | "worksheet" | "both";
 type ExportSize = "small" | "medium" | "large";
 type EditorViewMode = "canvas" | "worksheet";
+type ConnectorStyle = "rounded" | "angled";
 
 interface GuidedStep {
   id: string;
@@ -84,8 +85,7 @@ const LANE_START_X = 0;
 const LANE_BASE_START_Y = -120;
 const LANE_BASE_HEIGHT = 2200;
 const DEFAULT_NODE_WIDTH = 208;
-const SUPPORT_NODE_WIDTH = 176;
-const BARRIER_NODE_WIDTH = 120;
+const BARRIER_NODE_WIDTH = 156;
 const BARRIER_COLUMNS = 3;
 const BARRIER_COLUMN_GAP = 18;
 const BARRIER_LANE_PADDING = 28;
@@ -103,18 +103,18 @@ const LANE_STARTS = LANE_WIDTHS.reduce<number[]>((starts, width, index) => {
   return starts;
 }, []);
 const LANE_LABEL_HEIGHT = 48;
-const BARRIER_ROW_GAP = 118;
+const BARRIER_ROW_GAP = 128;
 const BRANCH_CLEARANCE = 42;
 const POSITION_PUSH_STEP = 28;
 const MAX_POSITION_ATTEMPTS = 48;
 const NODE_FOOTPRINTS: Record<NodeType, { width: number; height: number }> = {
   top_event: { width: DEFAULT_NODE_WIDTH, height: 116 },
   threat: { width: DEFAULT_NODE_WIDTH, height: 116 },
-  preventive_barrier: { width: BARRIER_NODE_WIDTH, height: 76 },
+  preventive_barrier: { width: BARRIER_NODE_WIDTH, height: 84 },
   consequence: { width: DEFAULT_NODE_WIDTH, height: 116 },
-  mitigative_barrier: { width: BARRIER_NODE_WIDTH, height: 76 },
-  escalation_factor: { width: SUPPORT_NODE_WIDTH, height: 90 },
-  escalation_factor_control: { width: SUPPORT_NODE_WIDTH, height: 90 },
+  mitigative_barrier: { width: BARRIER_NODE_WIDTH, height: 84 },
+  escalation_factor: { width: BARRIER_NODE_WIDTH, height: 84 },
+  escalation_factor_control: { width: BARRIER_NODE_WIDTH, height: 84 },
 };
 const LANE_TOP_PADDING = 220;
 const LANE_BOTTOM_PADDING = 320;
@@ -409,37 +409,6 @@ function findNearestNodeByType(
   );
 }
 
-function getMitigativeChainForConsequence(
-  nodes: Node<BowtieNodeData>[],
-  edges: Edge[],
-  consequenceId: string,
-): string[] {
-  const nodeMap = new Map(nodes.map((node) => [node.id, node]));
-  const incoming = new Map<string, Edge[]>();
-  for (const edge of edges) {
-    const list = incoming.get(edge.target) ?? [];
-    list.push(edge);
-    incoming.set(edge.target, list);
-  }
-
-  const chainFromConsequence: string[] = [];
-  let cursor = consequenceId;
-  const visited = new Set<string>();
-  while (true) {
-    const nextEdge = (incoming.get(cursor) ?? []).find((edge) => {
-      const sourceNode = nodeMap.get(edge.source);
-      return sourceNode?.data.type === "mitigative_barrier";
-    });
-    if (!nextEdge) break;
-    if (visited.has(nextEdge.source)) break;
-    visited.add(nextEdge.source);
-    chainFromConsequence.push(nextEdge.source);
-    cursor = nextEdge.source;
-  }
-
-  return chainFromConsequence.reverse();
-}
-
 function computePreventiveBarrierIndexById(
   nodes: Node<BowtieNodeData>[],
   edges: Edge[],
@@ -489,22 +458,44 @@ function computeMitigativeChainIndexById(
   chainNodeIdsByConsequenceId: Record<string, string[]>;
   maxDepth: number;
 } {
+  const nodeMap = new Map(nodes.map((node) => [node.id, node]));
   const indexByNodeId: Record<string, number> = {};
   const consequenceIdByNodeId: Record<string, string> = {};
   const chainNodeIdsByConsequenceId: Record<string, string[]> = {};
   let maxDepth = 1;
-  const consequences = nodes.filter((node) => node.data.type === "consequence");
-  for (const consequence of consequences) {
-    const chain = getMitigativeChainForConsequence(nodes, edges, consequence.id);
-    chainNodeIdsByConsequenceId[consequence.id] = chain;
-    if (chain.length > maxDepth) {
-      maxDepth = chain.length;
+
+  for (const edge of edges) {
+    const sourceNode = nodeMap.get(edge.source);
+    const targetNode = nodeMap.get(edge.target);
+    if (sourceNode?.data.type !== "mitigative_barrier" || targetNode?.data.type !== "consequence") {
+      continue;
     }
-    chain.forEach((nodeId, index) => {
-      indexByNodeId[nodeId] = index;
-      consequenceIdByNodeId[nodeId] = consequence.id;
-    });
+    chainNodeIdsByConsequenceId[targetNode.id] = [...(chainNodeIdsByConsequenceId[targetNode.id] ?? []), sourceNode.id];
+    consequenceIdByNodeId[sourceNode.id] = targetNode.id;
   }
+
+  Object.entries(chainNodeIdsByConsequenceId).forEach(([consequenceId, barrierIds]) => {
+    const ordered = [...barrierIds].sort((leftId, rightId) => {
+      const leftNode = nodeMap.get(leftId);
+      const rightNode = nodeMap.get(rightId);
+      if (!leftNode || !rightNode) return 0;
+      return leftNode.position.y - rightNode.position.y || leftNode.position.x - rightNode.position.x;
+    });
+
+    chainNodeIdsByConsequenceId[consequenceId] = ordered;
+    if (ordered.length > maxDepth) {
+      maxDepth = ordered.length;
+    }
+    ordered.forEach((nodeId, index) => {
+      indexByNodeId[nodeId] = index;
+      consequenceIdByNodeId[nodeId] = consequenceId;
+    });
+  });
+
+  if (maxDepth > BARRIER_COLUMNS) {
+    maxDepth = BARRIER_COLUMNS;
+  }
+
   return { indexByNodeId, consequenceIdByNodeId, chainNodeIdsByConsequenceId, maxDepth };
 }
 
@@ -595,7 +586,10 @@ function quickAddOptionsFor(type: NodeType, side: "left" | "right"): QuickAddOpt
     return [{ type: "preventive_barrier", label: "Preventive Barrier" }];
   }
   if (type === "preventive_barrier" && side === "left") {
-    return [{ type: "threat", label: "Threat" }];
+    return [
+      { type: "threat", label: "Threat" },
+      { type: "preventive_barrier", label: "Barrier" },
+    ];
   }
   if (type === "top_event" && side === "left") {
     return [{ type: "threat", label: "Threat" }];
@@ -604,21 +598,78 @@ function quickAddOptionsFor(type: NodeType, side: "left" | "right"): QuickAddOpt
     return [{ type: "consequence", label: "Consequence" }];
   }
   if (type === "mitigative_barrier" && side === "right") {
-    return [{ type: "consequence", label: "Consequence" }];
+    return [
+      { type: "consequence", label: "Consequence" },
+      { type: "mitigative_barrier", label: "Barrier" },
+    ];
   }
   if (type === "consequence" && side === "left") {
     return [{ type: "mitigative_barrier", label: "Mitigative Barrier" }];
   }
   if (type === "preventive_barrier" && side === "right") {
-    return [{ type: "escalation_factor", label: "Escalation Factor" }];
+    return [
+      { type: "preventive_barrier", label: "Barrier" },
+      { type: "escalation_factor", label: "Escalation Factor" },
+    ];
   }
   if (type === "mitigative_barrier" && side === "left") {
-    return [{ type: "escalation_factor", label: "Escalation Factor" }];
+    return [
+      { type: "mitigative_barrier", label: "Barrier" },
+      { type: "escalation_factor", label: "Escalation Factor" },
+    ];
   }
   if (type === "escalation_factor" && side === "right") {
     return [{ type: "escalation_factor_control", label: "Escalation Factor Control" }];
   }
   return [];
+}
+
+function isEscalationEdge(
+  sourceType: NodeType,
+  targetType: NodeType,
+) {
+  return (
+    sourceType === "escalation_factor" ||
+    sourceType === "escalation_factor_control" ||
+    targetType === "escalation_factor"
+  );
+}
+
+function buildEdge(
+  sourceNode: Node<BowtieNodeData>,
+  targetNode: Node<BowtieNodeData>,
+): Edge {
+  return {
+    id: uuid(),
+    source: sourceNode.id,
+    target: targetNode.id,
+    type: "smoothstep",
+    ...(isEscalationEdge(sourceNode.data.type, targetNode.data.type)
+      ? { style: { stroke: "#a855f7", strokeDasharray: "6 4" } }
+      : {}),
+  };
+}
+
+function isLogicalConnectionAllowed(sourceType: NodeType, targetType: NodeType) {
+  if (sourceType === "threat" && targetType === "preventive_barrier") return true;
+  if (sourceType === "threat" && targetType === "top_event") return true;
+  if (sourceType === "preventive_barrier" && targetType === "top_event") return true;
+  if (sourceType === "top_event" && targetType === "consequence") return true;
+  if (sourceType === "top_event" && targetType === "mitigative_barrier") return true;
+  if (sourceType === "mitigative_barrier" && targetType === "consequence") return true;
+  if (sourceType === "escalation_factor" && (targetType === "preventive_barrier" || targetType === "mitigative_barrier")) {
+    return true;
+  }
+  if (sourceType === "escalation_factor_control" && targetType === "escalation_factor") return true;
+  return false;
+}
+
+function getConnectorDisplayConfig(connectorStyle: ConnectorStyle) {
+  if (connectorStyle === "angled") {
+    return { type: "step" as const, pathOptions: { offset: 14 } };
+  }
+
+  return { type: "smoothstep" as const, pathOptions: { borderRadius: 18, offset: 28 } };
 }
 
 function getEdgeForPair(
@@ -678,6 +729,7 @@ export function BowtieEditor({
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [selectedEdgeIds, setSelectedEdgeIds] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<EditorViewMode>(initialViewMode);
+  const [connectorStyle, setConnectorStyle] = useState<ConnectorStyle>("rounded");
   const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 });
   const [worksheetStepTitle, setWorksheetStepTitle] = useState("Select a worksheet step");
   const [worksheetGuidance, setWorksheetGuidance] = useState<StepGuidance | null>(
@@ -693,6 +745,7 @@ export function BowtieEditor({
   const [exportSize, setExportSize] = useState<ExportSize>("medium");
   const [exporting, setExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const [historyTick, setHistoryTick] = useState(0);
   const canvasRef = useRef<HTMLDivElement>(null);
   const autosaveRef = useRef<number | undefined>(undefined);
   const didHydrateTopEventRef = useRef(false);
@@ -735,12 +788,10 @@ export function BowtieEditor({
   const showStarterGuide = !readOnly && guidedCompletionCount < guidedSteps.length;
   const {
     indexByNodeId: preventiveBarrierIndexByNodeId,
-    threatIdByNodeId: threatIdByPreventiveBarrierNodeId,
     barrierIdsByThreatId,
   } = useMemo(() => computePreventiveBarrierIndexById(nodes, edges), [nodes, edges]);
   const {
     indexByNodeId: mitigativeChainIndexByNodeId,
-    consequenceIdByNodeId: consequenceIdByMitigativeBarrierNodeId,
     chainNodeIdsByConsequenceId,
     maxDepth: mitigativeChainDepth,
   } = useMemo(
@@ -786,28 +837,6 @@ export function BowtieEditor({
       ),
     [nodes, mitigativeRowsByConsequenceId],
   );
-  const preventiveBarrierYByNodeId = useMemo(() => {
-    const next: Record<string, number> = {};
-    Object.entries(threatIdByPreventiveBarrierNodeId).forEach(([barrierId, threatId]) => {
-      const threatY = packedThreatYByNodeId[threatId];
-      if (typeof threatY !== "number") {
-        return;
-      }
-      next[barrierId] = threatY + barrierRowOffset(preventiveBarrierIndexByNodeId[barrierId] ?? 0);
-    });
-    return next;
-  }, [packedThreatYByNodeId, preventiveBarrierIndexByNodeId, threatIdByPreventiveBarrierNodeId]);
-  const mitigativeBarrierYByNodeId = useMemo(() => {
-    const next: Record<string, number> = {};
-    Object.entries(consequenceIdByMitigativeBarrierNodeId).forEach(([barrierId, consequenceId]) => {
-      const consequenceY = packedConsequenceYByNodeId[consequenceId];
-      if (typeof consequenceY !== "number") {
-        return;
-      }
-      next[barrierId] = consequenceY + barrierRowOffset(mitigativeChainIndexByNodeId[barrierId] ?? 0);
-    });
-    return next;
-  }, [consequenceIdByMitigativeBarrierNodeId, mitigativeChainIndexByNodeId, packedConsequenceYByNodeId]);
   const mitigativeColumns = Math.max(1, mitigativeChainDepth);
   const laneWidths = LANE_WIDTHS;
   const totalLaneWidth = useMemo(() => laneWidths.reduce((sum, width) => sum + width, 0), [laneWidths]);
@@ -825,6 +854,8 @@ export function BowtieEditor({
     return { laneTop: top, laneHeight: bottom - top };
   }, [nodes]);
   const viewportStorageKey = useMemo(() => `bowtie:viewport:${projectId}`, [projectId]);
+  const canUndo = historyTick >= 0 && historyRef.current.past.length > 1;
+  const canRedo = historyTick >= 0 && historyRef.current.future.length > 0;
   const onWorksheetTopEventChange = useCallback(
     (title: string) => {
       const normalized = title.trim();
@@ -1004,6 +1035,7 @@ export function BowtieEditor({
     }
     history.future = [];
     history.lastHash = hash;
+    setHistoryTick((tick) => tick + 1);
   }, [nodes, edges]);
 
   useEffect(() => {
@@ -1041,7 +1073,8 @@ export function BowtieEditor({
   }, [initialWorkflowState?.step1TopEvent, mitigativeColumns, nodes, setNodes]);
 
   const onConnect = useCallback(
-    (connection: Edge | Connection) => setEdges((existing) => addEdge({ ...connection, type: "smoothstep" }, existing)),
+    (connection: Edge | Connection) =>
+      setEdges((existing) => addEdge({ ...connection, type: "smoothstep" }, existing)),
     [setEdges],
   );
 
@@ -1127,15 +1160,8 @@ export function BowtieEditor({
           { ...node.data, barrierIndex, chainIndex, supportLane, supportAnchorX },
           mitigativeColumns,
         );
-        const y =
-          node.data.type === "preventive_barrier"
-            ? (preventiveBarrierYByNodeId[node.id] ?? node.position.y)
-            : node.data.type === "mitigative_barrier"
-              ? (mitigativeBarrierYByNodeId[node.id] ?? node.position.y)
-              : node.position.y;
         if (
           Math.abs(node.position.x - x) < 0.5 &&
-          Math.abs(node.position.y - y) < 0.5 &&
           chainIndex === node.data.chainIndex &&
           supportAnchorX === node.data.supportAnchorX
         ) {
@@ -1144,39 +1170,161 @@ export function BowtieEditor({
         changed = true;
         return {
           ...node,
-          position: { ...node.position, x, y },
+          position: { ...node.position, x },
           data: { ...node.data, chainIndex, supportLane, supportAnchorX },
         };
       });
       return changed ? next : existing;
     });
   }, [
-    mitigativeBarrierYByNodeId,
     mitigativeChainIndexByNodeId,
     mitigativeColumns,
     preventiveBarrierIndexByNodeId,
-    preventiveBarrierYByNodeId,
     setNodes,
     supportAnchorXByNodeId,
   ]);
+
+  const collectCascadeDeleteNodeIds = useCallback((
+    rootIds: string[],
+    graphNodes: Node<BowtieNodeData>[] = nodes,
+    graphEdges: Edge[] = edges,
+  ) => {
+    const nodeMap = new Map(graphNodes.map((node) => [node.id, node]));
+    const incoming = new Map<string, string[]>();
+    const outgoing = new Map<string, string[]>();
+
+    for (const edge of graphEdges) {
+      incoming.set(edge.target, [...(incoming.get(edge.target) ?? []), edge.source]);
+      outgoing.set(edge.source, [...(outgoing.get(edge.source) ?? []), edge.target]);
+    }
+
+    const ownedChildren = (nodeId: string) => {
+      const node = nodeMap.get(nodeId);
+      if (!node) return [];
+
+      if (node.data.type === "top_event") {
+        return Array.from(new Set([...(incoming.get(nodeId) ?? []), ...(outgoing.get(nodeId) ?? [])]));
+      }
+      if (node.data.type === "threat") {
+        return (outgoing.get(nodeId) ?? []).filter(
+          (childId) => nodeMap.get(childId)?.data.type === "preventive_barrier",
+        );
+      }
+      if (node.data.type === "consequence") {
+        return (incoming.get(nodeId) ?? []).filter(
+          (childId) => nodeMap.get(childId)?.data.type === "mitigative_barrier",
+        );
+      }
+      if (node.data.type === "preventive_barrier" || node.data.type === "mitigative_barrier") {
+        return (incoming.get(nodeId) ?? []).filter(
+          (childId) => nodeMap.get(childId)?.data.type === "escalation_factor",
+        );
+      }
+      if (node.data.type === "escalation_factor") {
+        return (incoming.get(nodeId) ?? []).filter(
+          (childId) => nodeMap.get(childId)?.data.type === "escalation_factor_control",
+        );
+      }
+
+      return [];
+    };
+
+    const deleted = new Set<string>();
+    const stack = [...rootIds];
+    while (stack.length > 0) {
+      const currentId = stack.pop();
+      if (!currentId || deleted.has(currentId)) continue;
+      deleted.add(currentId);
+      for (const childId of ownedChildren(currentId)) {
+        if (!deleted.has(childId)) {
+          stack.push(childId);
+        }
+      }
+    }
+
+    return deleted;
+  }, [edges, nodes]);
 
   const deleteSelected = useCallback(() => {
     if (selectedNodeIds.length === 0 && selectedEdgeIds.length === 0) {
       return;
     }
-    setEdges((existing) =>
-      existing.filter(
+
+    const selectedNodeSet = new Set(selectedNodeIds);
+    const deletedNodeIds = collectCascadeDeleteNodeIds(selectedNodeIds);
+    const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+    const reconnectEdges: Edge[] = [];
+    const reconnectKeys = new Set<string>();
+
+    for (const rootId of selectedNodeIds) {
+      const rootNode = nodeMap.get(rootId);
+      if (!rootNode) continue;
+
+      const survivingIncoming = edges.filter(
+        (edge) =>
+          edge.target === rootId &&
+          !deletedNodeIds.has(edge.source),
+      );
+      const survivingOutgoing = edges.filter(
+        (edge) =>
+          edge.source === rootId &&
+          !deletedNodeIds.has(edge.target),
+      );
+
+      for (const incomingEdge of survivingIncoming) {
+        const sourceNode = nodeMap.get(incomingEdge.source);
+        if (!sourceNode) continue;
+        for (const outgoingEdge of survivingOutgoing) {
+          const targetNode = nodeMap.get(outgoingEdge.target);
+          if (!targetNode) continue;
+          if (!isLogicalConnectionAllowed(sourceNode.data.type, targetNode.data.type)) {
+            continue;
+          }
+          const key = `${sourceNode.id}:${targetNode.id}`;
+          if (reconnectKeys.has(key)) continue;
+          const alreadyExists = edges.some(
+            (edge) =>
+              edge.source === sourceNode.id &&
+              edge.target === targetNode.id &&
+              !selectedEdgeIds.includes(edge.id),
+          );
+          if (alreadyExists) continue;
+          reconnectKeys.add(key);
+          reconnectEdges.push(buildEdge(sourceNode, targetNode));
+        }
+      }
+    }
+
+    if (selectedNodeIds.length > 0 && typeof window !== "undefined") {
+      const dependentCount = Math.max(0, deletedNodeIds.size - selectedNodeSet.size);
+      const reconnectCount = reconnectEdges.length;
+      const confirmation = window.confirm(
+        `Delete ${deletedNodeIds.size} node${deletedNodeIds.size === 1 ? "" : "s"}${
+          dependentCount > 0 ? ` including ${dependentCount} dependent child node${dependentCount === 1 ? "" : "s"}` : ""
+        }?${reconnectCount > 0 ? ` ${reconnectCount} connector${reconnectCount === 1 ? "" : "s"} will be re-linked.` : ""}`,
+      );
+      if (!confirmation) {
+        return;
+      }
+    }
+
+    const nextNodes = nodes.filter((node) => !deletedNodeIds.has(node.id));
+    const nextEdges = [
+      ...edges.filter(
         (edge) =>
           !selectedEdgeIds.includes(edge.id) &&
-          !selectedNodeIds.includes(edge.source) &&
-          !selectedNodeIds.includes(edge.target),
+          !deletedNodeIds.has(edge.source) &&
+          !deletedNodeIds.has(edge.target),
       ),
-    );
-    setNodes((existing) => existing.filter((node) => !selectedNodeIds.includes(node.id)));
+      ...reconnectEdges,
+    ];
+
+    setNodes(nextNodes);
+    setEdges(nextEdges);
     setSelectedNodeIds([]);
     setSelectedEdgeIds([]);
     setSelectedId(null);
-  }, [selectedNodeIds, selectedEdgeIds, setEdges, setNodes]);
+  }, [collectCascadeDeleteNodeIds, edges, nodes, selectedEdgeIds, selectedNodeIds, setEdges, setNodes]);
 
   const undo = useCallback(() => {
     const history = historyRef.current;
@@ -1197,6 +1345,7 @@ export function BowtieEditor({
     setSelectedNodeIds([]);
     setSelectedEdgeIds([]);
     setSelectedId(null);
+    setHistoryTick((tick) => tick + 1);
   }, [setEdges, setNodes]);
 
   const redo = useCallback(() => {
@@ -1213,6 +1362,7 @@ export function BowtieEditor({
     setSelectedNodeIds([]);
     setSelectedEdgeIds([]);
     setSelectedId(null);
+    setHistoryTick((tick) => tick + 1);
   }, [setEdges, setNodes]);
 
   const copySelection = useCallback(() => {
@@ -1366,14 +1516,53 @@ export function BowtieEditor({
         ? selectedNode?.position.x
         : undefined;
     const sameTypeNodes = nodes.filter((node) => node.data.type === type);
-    const nextBaseY =
+    const nearestThreat = findNearestNodeByType(nodes, "threat", selectedNode?.position.y ?? 260);
+    const nearestConsequence = findNearestNodeByType(nodes, "consequence", selectedNode?.position.y ?? 260);
+    let barrierIndex: number | undefined;
+    let chainIndex: number | undefined;
+    let nextBaseY =
       type === "top_event"
         ? 260
         : sameTypeNodes.length > 0
           ? Math.max(...sameTypeNodes.map((node) => node.position.y)) + BARRIER_ROW_GAP
           : 140;
+
+    if (type === "preventive_barrier") {
+      const threatNode =
+        selectedNode?.data.type === "threat"
+          ? selectedNode
+          : selectedNode?.data.type === "preventive_barrier"
+            ? findConnectedNode(selectedNode.id, "incoming", "threat")
+            : nearestThreat;
+      if (threatNode) {
+        barrierIndex = edges.filter(
+          (edge) =>
+            edge.source === threatNode.id &&
+            nodes.find((node) => node.id === edge.target)?.data.type === "preventive_barrier",
+        ).length;
+        nextBaseY = threatNode.position.y + barrierRowOffset(barrierIndex);
+      }
+    }
+
+    if (type === "mitigative_barrier") {
+      const consequenceNode =
+        selectedNode?.data.type === "consequence"
+          ? selectedNode
+          : selectedNode?.data.type === "mitigative_barrier"
+            ? findConnectedNode(selectedNode.id, "outgoing", "consequence")
+            : nearestConsequence;
+      if (consequenceNode) {
+        chainIndex = edges.filter(
+          (edge) =>
+            edge.target === consequenceNode.id &&
+            nodes.find((node) => node.id === edge.source)?.data.type === "mitigative_barrier",
+        ).length;
+        nextBaseY = consequenceNode.position.y + barrierRowOffset(chainIndex);
+      }
+    }
+
     const basePosition = {
-      x: laneXForNode(type, { supportLane, supportAnchorX }, mitigativeColumns),
+      x: laneXForNode(type, { supportLane, supportAnchorX, barrierIndex, chainIndex }, mitigativeColumns),
       y: nextBaseY,
     };
     const position = findNonOverlappingPosition({ ...basePosition, type }, nodes);
@@ -1394,6 +1583,7 @@ export function BowtieEditor({
               ? supportLane
               : undefined,
           supportAnchorX,
+          chainIndex,
         },
       },
     ]);
@@ -1530,36 +1720,31 @@ export function BowtieEditor({
           ? parent
           : findConnectedNode(parent.id, "outgoing", "consequence", graphNodes, graphEdges) ??
             findNearestNodeByType(graphNodes, "consequence", parent.position.y);
+      const topEvent =
+        findConnectedNode(parent.id, "incoming", "top_event", graphNodes, graphEdges) ??
+        findNearestNodeByType(graphNodes, "top_event", parent.position.y);
 
-      if (parent.data.type === "consequence") {
-        const topEvent = findNearestNodeByType(graphNodes, "top_event", parent.position.y);
-        const chain = getMitigativeChainForConsequence(graphNodes, graphEdges, parent.id);
-        chainIndex = chain.length;
-        y = parent.position.y + barrierRowOffset(chainIndex);
+      if (consequenceNode) {
+        const branchBarrierCount = graphEdges.filter(
+          (edge) =>
+            edge.target === consequenceNode.id &&
+            graphNodes.find((node) => node.id === edge.source)?.data.type === "mitigative_barrier",
+        ).length;
+        chainIndex = branchBarrierCount;
         x = laneXForNode("mitigative_barrier", { chainIndex }, mitigativeColumns);
+        y = consequenceNode.position.y + barrierRowOffset(chainIndex);
+      }
 
-        const lastInChainId = chain.length > 0 ? chain[chain.length - 1] : topEvent?.id;
-        if (lastInChainId) {
+      if (topEvent) {
+        nextEdges.push({ id: uuid(), source: topEvent.id, target: childId, type: "smoothstep" });
+        if (parent.data.type === "consequence" && chainIndex === 0) {
           graphEdges
-            .filter((edge) => edge.source === lastInChainId && edge.target === parent.id)
+            .filter((edge) => edge.source === topEvent.id && edge.target === parent.id)
             .forEach((edge) => edgesToRemove.add(edge.id));
-          nextEdges.push({ id: uuid(), source: lastInChainId, target: childId, type: "smoothstep" });
         }
-        nextEdges.push({ id: uuid(), source: childId, target: parent.id, type: "smoothstep" });
-      } else {
-        const topEvent =
-          findConnectedNode(parent.id, "incoming", "top_event", graphNodes, graphEdges) ??
-          findNearestNodeByType(graphNodes, "top_event", parent.position.y);
-        if (topEvent) {
-          nextEdges.push({ id: uuid(), source: topEvent.id, target: childId, type: "smoothstep" });
-        }
-        if (consequenceNode) {
-          const chain = getMitigativeChainForConsequence(graphNodes, graphEdges, consequenceNode.id);
-          chainIndex = chain.length;
-          x = laneXForNode("mitigative_barrier", { chainIndex }, mitigativeColumns);
-          y = consequenceNode.position.y + barrierRowOffset(chainIndex);
-          nextEdges.push({ id: uuid(), source: childId, target: consequenceNode.id, type: "smoothstep" });
-        }
+      }
+      if (consequenceNode) {
+        nextEdges.push({ id: uuid(), source: childId, target: consequenceNode.id, type: "smoothstep" });
       }
     } else if (childType === "escalation_factor" || childType === "escalation_factor_control") {
       nextEdges.push(getEdgeForPair(parent.data.type, childType, childId, parent.id));
@@ -1567,11 +1752,9 @@ export function BowtieEditor({
       nextEdges.push(getEdgeForPair(parent.data.type, childType, childId, parent.id));
     }
 
-    if (childType !== "preventive_barrier" && childType !== "mitigative_barrier") {
-      const nextPosition = findNonOverlappingPosition({ x, y, type: childType }, graphNodes);
-      x = nextPosition.x;
-      y = nextPosition.y;
-    }
+    const nextPosition = findNonOverlappingPosition({ x, y, type: childType }, graphNodes);
+    x = nextPosition.x;
+    y = nextPosition.y;
 
     const newNode: Node<BowtieNodeData> = {
       id: childId,
@@ -1778,9 +1961,10 @@ export function BowtieEditor({
     () =>
       edges.map((edge) => ({
         ...edge,
+        ...getConnectorDisplayConfig(connectorStyle),
         hidden: hiddenNodeIds.has(edge.source) || hiddenNodeIds.has(edge.target),
       })),
-    [edges, hiddenNodeIds],
+    [connectorStyle, edges, hiddenNodeIds],
   );
 
   function downloadDataUrl(dataUrl: string, filename: string) {
@@ -2060,6 +2244,34 @@ export function BowtieEditor({
               >
                 Worksheet
               </button>
+            </div>
+
+            <div className="mb-3 rounded border border-[#9CA3AF] bg-white p-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-[#1F2933]/75">Canvas Tools</p>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <button
+                  onClick={undo}
+                  disabled={!canUndo}
+                  className="rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs font-semibold text-[#1F2933] disabled:opacity-50"
+                >
+                  Undo
+                </button>
+                <button
+                  onClick={redo}
+                  disabled={!canRedo}
+                  className="rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs font-semibold text-[#1F2933] disabled:opacity-50"
+                >
+                  Redo
+                </button>
+              </div>
+              <select
+                value={connectorStyle}
+                onChange={(event) => setConnectorStyle(event.target.value as ConnectorStyle)}
+                className="mt-2 w-full rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs text-[#1F2933]"
+              >
+                <option value="rounded">Connectors: Rounded</option>
+                <option value="angled">Connectors: Hard Angles</option>
+              </select>
             </div>
 
             <h3 className="text-sm font-semibold text-[#1F2933]">Palette</h3>
