@@ -2408,218 +2408,231 @@ export function BowtieEditor({
       ) : null}
 
       <div className="flex min-h-0 flex-1">
-        <div className="w-64 border-r border-[#9CA3AF] bg-[#E5E7EB] p-3">
-        {readOnly ? (
-          <div className="space-y-4">
-            <div className="rounded border border-[#9CA3AF] bg-white p-3">
-              <p className="text-xs font-semibold uppercase tracking-wider text-[#325D88]">Example canvas</p>
-              <h3 className="mt-1 text-sm font-semibold text-[#1F2933]">{projectMeta.title}</h3>
-              <p className="mt-2 text-xs text-[#1F2933]/75">
-                {projectMeta.industry} scenario with a complete bowtie layout. Pan and zoom the canvas to inspect
-                how threats, barriers, escalation factors, and consequences connect.
-              </p>
-            </div>
-            <div className="rounded border border-[#9CA3AF] bg-white p-3 text-xs text-[#1F2933]/80">
-              <p className="font-semibold text-[#1F2933]">Top event</p>
-              <p className="mt-1">{projectMeta.topEvent}</p>
-              <p className="mt-3">
-                Nodes: <strong>{nodes.length}</strong>
-              </p>
-              <p className="mt-1">
-                Connectors: <strong>{edges.length}</strong>
-              </p>
-              <p className="mt-3">
-                This view is read-only. Create an account to build and save your own bowties.
-              </p>
-            </div>
-            <Link
-              href="/login?mode=signup"
-              className="block rounded bg-[#325D88] px-3 py-2 text-center text-xs font-semibold text-white"
-            >
-              Create Your Own
-            </Link>
-            <Link
-              href="/examples"
-              className="block rounded border border-[#9CA3AF] bg-white px-3 py-2 text-center text-xs font-semibold text-[#1F2933]"
-            >
-              All Examples
-            </Link>
-          </div>
-        ) : (
-          <>
-            <div className="mb-3 grid grid-cols-2 gap-1 rounded border border-[#9CA3AF] bg-white p-1">
-              <button
-                onClick={() => setViewMode("canvas")}
-                className={`rounded px-2 py-1 text-xs font-semibold ${
-                  viewMode === "canvas" ? "bg-[#325D88] text-white" : "text-[#1F2933]"
-                }`}
-              >
-                Canvas
-              </button>
-              <button
-                onClick={() => setViewMode("worksheet")}
-                className={`rounded px-2 py-1 text-xs font-semibold ${
-                  viewMode === "worksheet" ? "bg-[#325D88] text-white" : "text-[#1F2933]"
-                }`}
-              >
-                Worksheet
-              </button>
-            </div>
-
-            <div className="mb-3 rounded border border-[#9CA3AF] bg-white p-2">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-[#1F2933]/75">Canvas Tools</p>
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                <button
-                  onClick={undo}
-                  disabled={!canUndo}
-                  className="rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs font-semibold text-[#1F2933] disabled:opacity-50"
-                >
-                  Undo
-                </button>
-                <button
-                  onClick={redo}
-                  disabled={!canRedo}
-                  className="rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs font-semibold text-[#1F2933] disabled:opacity-50"
-                >
-                  Redo
-                </button>
-              </div>
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                <button
-                  onClick={fitToDiagram}
-                  className="rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs font-semibold text-[#1F2933]"
-                >
-                  Fit Diagram
-                </button>
-                <button
-                  onClick={centerTopEvent}
-                  className="rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs font-semibold text-[#1F2933]"
-                >
-                  Center Top Event
-                </button>
-              </div>
-              <select
-                value={connectorStyle}
-                onChange={(event) => setConnectorStyle(event.target.value as ConnectorStyle)}
-                className="mt-2 w-full rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs text-[#1F2933]"
-              >
-                <option value="rounded">Connectors: Rounded</option>
-                <option value="angled">Connectors: Hard Angles</option>
-              </select>
-              <p className="mt-2 text-[11px] text-[#1F2933]/65">
-                Shortcuts: `Ctrl/Cmd+Z` undo, `Shift+Ctrl/Cmd+Z` redo, `Delete` remove, `Ctrl/Cmd+V` paste.
-              </p>
-            </div>
-
-            <h3 className="text-sm font-semibold text-[#1F2933]">Palette</h3>
-            <div className="mt-2 grid gap-2">
-              {Object.entries(NODE_TYPE_META).map(([type, meta]) => (
-                <button
-                  key={type}
-                  onClick={() => addNode(type as keyof typeof NODE_TYPE_META)}
-                  className="rounded border border-[#9CA3AF] bg-white px-2 py-1 text-left text-xs text-[#1F2933]"
-                >
-                  + {meta.label}
-                </button>
-              ))}
-            </div>
-
-            <h4 className="mt-4 text-xs font-semibold uppercase text-[#1F2933]/70">Quick Add</h4>
-            <div className="mt-1 space-y-1">
-              <button className="w-full rounded bg-[#f6dfdd] px-2 py-1 text-xs text-[#1F2933]" onClick={() => addNode("threat")}>
-                + Threat
-              </button>
-              <button className="w-full rounded bg-[#dce6f1] px-2 py-1 text-xs text-[#1F2933]" onClick={() => addNode("consequence")}>
-                + Consequence
-              </button>
-              <button
-                className="w-full rounded bg-[#f4e7ca] px-2 py-1 text-xs text-[#1F2933]"
-                onClick={() => addNode("preventive_barrier")}
-              >
-                + Barrier
-              </button>
-            </div>
-
-            <div className="mt-4 space-y-2">
-              <button onClick={() => void saveCanvas()} className="w-full rounded bg-[#325D88] px-2 py-1 text-xs text-white">
-                {saving ? "Saving..." : "Save Now"}
-              </button>
-              <p className="text-[11px] text-[#1F2933]/65">
-                {saving
-                  ? "Saving changes..."
-                  : lastSavedAt
-                    ? `Saved ${new Date(lastSavedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
-                    : "Changes autosave after a short pause."}
-              </p>
-              <button
-                onClick={deleteSelected}
-                disabled={selectedNodeIds.length === 0 && selectedEdgeIds.length === 0}
-                className="w-full rounded border border-[#C7514A] bg-[#f9eceb] px-2 py-1 text-xs text-[#C7514A] disabled:opacity-50"
-              >
-                Delete Selected
-              </button>
-              <div className="rounded border border-[#9CA3AF] bg-white p-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-[#1F2933]/75">
-                  Export Builder
-                </p>
-                <div className="mt-2 grid gap-1">
-                  <select
-                    value={exportFormat}
-                    onChange={(event) => setExportFormat(event.target.value as ExportFormat)}
-                    className="rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs text-[#1F2933]"
-                  >
-                    <option value="png">Format: PNG</option>
-                    <option value="pdf">Format: PDF</option>
-                  </select>
-                  <select
-                    value={exportScope}
-                    onChange={(event) => setExportScope(event.target.value as ExportScope)}
-                    className="rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs text-[#1F2933]"
-                  >
-                    <option value="canvas">Scope: Canvas</option>
-                    <option value="worksheet">Scope: Worksheet</option>
-                    <option value="both">Scope: Both</option>
-                  </select>
-                  <select
-                    value={exportSize}
-                    onChange={(event) => setExportSize(event.target.value as ExportSize)}
-                    className="rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs text-[#1F2933]"
-                  >
-                    <option value="small">Size: Small</option>
-                    <option value="medium">Size: Medium</option>
-                    <option value="large">Size: Large</option>
-                  </select>
-                  <button
-                    onClick={() => void runExport()}
-                    disabled={exporting}
-                    className="rounded border border-[#9CA3AF] bg-[#325D88] px-2 py-1 text-xs font-semibold text-white disabled:opacity-70"
-                  >
-                    {exporting ? "Exporting..." : "Run Export"}
-                  </button>
-                  {exportMessage ? <p className="text-[11px] text-[#1F2933]/70">{exportMessage}</p> : null}
+        <div className="flex h-full min-h-0 w-64 flex-col border-r border-[#9CA3AF] bg-[#E5E7EB] p-3">
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+            {readOnly ? (
+              <div className="space-y-4">
+                <div className="rounded border border-[#9CA3AF] bg-white p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-[#325D88]">Example canvas</p>
+                  <h3 className="mt-1 text-sm font-semibold text-[#1F2933]">{projectMeta.title}</h3>
+                  <p className="mt-2 text-xs text-[#1F2933]/75">
+                    {projectMeta.industry} scenario with a complete bowtie layout. Pan and zoom the canvas to inspect
+                    how threats, barriers, escalation factors, and consequences connect.
+                  </p>
                 </div>
+                <div className="rounded border border-[#9CA3AF] bg-white p-3 text-xs text-[#1F2933]/80">
+                  <p className="font-semibold text-[#1F2933]">Top event</p>
+                  <p className="mt-1">{projectMeta.topEvent}</p>
+                  <p className="mt-3">
+                    Nodes: <strong>{nodes.length}</strong>
+                  </p>
+                  <p className="mt-1">
+                    Connectors: <strong>{edges.length}</strong>
+                  </p>
+                  <p className="mt-3">
+                    This view is read-only. Create an account to build and save your own bowties.
+                  </p>
+                </div>
+                <Link
+                  href="/login?mode=signup"
+                  className="block rounded bg-[#325D88] px-3 py-2 text-center text-xs font-semibold text-white"
+                >
+                  Create Your Own
+                </Link>
+                <Link
+                  href="/examples"
+                  className="block rounded border border-[#9CA3AF] bg-white px-3 py-2 text-center text-xs font-semibold text-[#1F2933]"
+                >
+                  All Examples
+                </Link>
               </div>
-              <button onClick={exportJson} className="w-full rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs text-[#1F2933]">
-                Export JSON
-              </button>
-              <label className="block cursor-pointer rounded border border-[#9CA3AF] bg-white px-2 py-1 text-center text-xs text-[#1F2933]">
-                Import JSON
-                <input type="file" accept="application/json" onChange={importJson} className="hidden" />
-              </label>
-            </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-1 rounded border border-[#9CA3AF] bg-white p-1">
+                  <button
+                    onClick={() => setViewMode("canvas")}
+                    className={`rounded px-2 py-1 text-xs font-semibold ${
+                      viewMode === "canvas" ? "bg-[#325D88] text-white" : "text-[#1F2933]"
+                    }`}
+                  >
+                    Canvas
+                  </button>
+                  <button
+                    onClick={() => setViewMode("worksheet")}
+                    className={`rounded px-2 py-1 text-xs font-semibold ${
+                      viewMode === "worksheet" ? "bg-[#325D88] text-white" : "text-[#1F2933]"
+                    }`}
+                  >
+                    Worksheet
+                  </button>
+                </div>
 
-            {warnings.length > 0 ? (
-              <div className="mt-4 rounded border border-[#D4A547] bg-[#f8f1df] p-2 text-xs text-[#1F2933]">
-                <p className="font-semibold">Soft warnings</p>
-                <ul className="mt-1 list-disc pl-4">
-                  {warnings.map((warning) => (
-                    <li key={warning}>{warning}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-          </>
-        )}
+                <div className="rounded border border-[#9CA3AF] bg-white p-2.5">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-[#1F2933]/75">Canvas Tools</p>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <button
+                      onClick={undo}
+                      disabled={!canUndo}
+                      className="rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs font-semibold text-[#1F2933] disabled:opacity-50"
+                    >
+                      Undo
+                    </button>
+                    <button
+                      onClick={redo}
+                      disabled={!canRedo}
+                      className="rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs font-semibold text-[#1F2933] disabled:opacity-50"
+                    >
+                      Redo
+                    </button>
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <button
+                      onClick={fitToDiagram}
+                      className="rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs font-semibold text-[#1F2933]"
+                    >
+                      Fit Diagram
+                    </button>
+                    <button
+                      onClick={centerTopEvent}
+                      className="rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs font-semibold text-[#1F2933]"
+                    >
+                      Center Top Event
+                    </button>
+                  </div>
+                  <select
+                    value={connectorStyle}
+                    onChange={(event) => setConnectorStyle(event.target.value as ConnectorStyle)}
+                    className="mt-2 w-full rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs text-[#1F2933]"
+                  >
+                    <option value="rounded">Connectors: Rounded</option>
+                    <option value="angled">Connectors: Hard Angles</option>
+                  </select>
+                  <p className="mt-2 text-[11px] leading-5 text-[#1F2933]/65">
+                    Shortcuts: `Ctrl/Cmd+Z` undo, `Shift+Ctrl/Cmd+Z` redo, `Delete` remove, `Ctrl/Cmd+V` paste.
+                  </p>
+                </div>
+
+                <div className="rounded border border-[#9CA3AF] bg-white p-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-sm font-semibold text-[#1F2933]">Add Nodes</h3>
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-[#1F2933]/45">
+                      Common
+                    </span>
+                  </div>
+                  <div className="mt-2 grid gap-2">
+                    {(["threat", "consequence", "preventive_barrier", "mitigative_barrier"] as NodeType[]).map((type) => (
+                      <button
+                        key={type}
+                        onClick={() => addNode(type)}
+                        className="rounded border border-[#9CA3AF] bg-white px-2.5 py-1.5 text-left text-xs font-medium text-[#1F2933]"
+                      >
+                        + {NODE_TYPE_META[type].label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded border border-[#9CA3AF] bg-white p-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className="text-sm font-semibold text-[#1F2933]">Advanced Nodes</h4>
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-[#1F2933]/45">
+                      Less Frequent
+                    </span>
+                  </div>
+                  <div className="mt-2 grid gap-2">
+                    {(["top_event", "escalation_factor", "escalation_factor_control"] as NodeType[]).map((type) => (
+                      <button
+                        key={type}
+                        onClick={() => addNode(type)}
+                        className="rounded border border-[#9CA3AF] bg-[#F7F8FA] px-2.5 py-1.5 text-left text-xs font-medium text-[#1F2933]"
+                      >
+                        + {NODE_TYPE_META[type].label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <button onClick={() => void saveCanvas()} className="w-full rounded bg-[#325D88] px-2 py-1.5 text-xs text-white">
+                    {saving ? "Saving..." : "Save Now"}
+                  </button>
+                  <p className="text-[11px] text-[#1F2933]/65">
+                    {saving
+                      ? "Saving changes..."
+                      : lastSavedAt
+                        ? `Saved ${new Date(lastSavedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
+                        : "Changes autosave after a short pause."}
+                  </p>
+                  <button
+                    onClick={deleteSelected}
+                    disabled={selectedNodeIds.length === 0 && selectedEdgeIds.length === 0}
+                    className="w-full rounded border border-[#C7514A] bg-[#f9eceb] px-2 py-1.5 text-xs text-[#C7514A] disabled:opacity-50"
+                  >
+                    Delete Selected
+                  </button>
+                  <div className="rounded border border-[#9CA3AF] bg-white p-2.5">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-[#1F2933]/75">
+                      Export Builder
+                    </p>
+                    <div className="mt-2 grid gap-1">
+                      <select
+                        value={exportFormat}
+                        onChange={(event) => setExportFormat(event.target.value as ExportFormat)}
+                        className="rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs text-[#1F2933]"
+                      >
+                        <option value="png">Format: PNG</option>
+                        <option value="pdf">Format: PDF</option>
+                      </select>
+                      <select
+                        value={exportScope}
+                        onChange={(event) => setExportScope(event.target.value as ExportScope)}
+                        className="rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs text-[#1F2933]"
+                      >
+                        <option value="canvas">Scope: Canvas</option>
+                        <option value="worksheet">Scope: Worksheet</option>
+                        <option value="both">Scope: Both</option>
+                      </select>
+                      <select
+                        value={exportSize}
+                        onChange={(event) => setExportSize(event.target.value as ExportSize)}
+                        className="rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs text-[#1F2933]"
+                      >
+                        <option value="small">Size: Small</option>
+                        <option value="medium">Size: Medium</option>
+                        <option value="large">Size: Large</option>
+                      </select>
+                      <button
+                        onClick={() => void runExport()}
+                        disabled={exporting}
+                        className="rounded border border-[#9CA3AF] bg-[#325D88] px-2 py-1 text-xs font-semibold text-white disabled:opacity-70"
+                      >
+                        {exporting ? "Exporting..." : "Run Export"}
+                      </button>
+                      {exportMessage ? <p className="text-[11px] text-[#1F2933]/70">{exportMessage}</p> : null}
+                    </div>
+                  </div>
+                  <button onClick={exportJson} className="w-full rounded border border-[#9CA3AF] bg-white px-2 py-1.5 text-xs text-[#1F2933]">
+                    Export JSON
+                  </button>
+                  <label className="block cursor-pointer rounded border border-[#9CA3AF] bg-white px-2 py-1.5 text-center text-xs text-[#1F2933]">
+                    Import JSON
+                    <input type="file" accept="application/json" onChange={importJson} className="hidden" />
+                  </label>
+                </div>
+
+                {warnings.length > 0 ? (
+                  <div className="rounded border border-[#D4A547] bg-[#f8f1df] p-2.5 text-xs text-[#1F2933]">
+                    <p className="font-semibold">Soft warnings</p>
+                    <ul className="mt-1 list-disc pl-4">
+                      {warnings.map((warning) => (
+                        <li key={warning}>{warning}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </>
+            )}
+          </div>
         </div>
 
         <div className="relative min-w-0 flex-1" ref={canvasRef}>
