@@ -7,7 +7,6 @@ import { ByokProviderPreference } from "@/lib/ai/suggestions";
 const updateSchema = z.object({
   apiKey: z.string().optional(),
   selectedModel: z.string().optional(),
-  planTier: z.enum(["free", "pro", "team"]).optional(),
   byokProvider: z
     .enum(["auto", "openai", "openrouter", "anthropic", "gemini"])
     .optional(),
@@ -79,7 +78,7 @@ export async function PATCH(request: Request) {
     const payload = parsed.data;
     const { data: existing } = await supabase
       .from("user_settings")
-      .select("has_encrypted_api_key")
+      .select("has_encrypted_api_key, plan_tier")
       .eq("user_id", user.id)
       .single();
 
@@ -94,7 +93,7 @@ export async function PATCH(request: Request) {
       user_id: user.id,
       has_encrypted_api_key: existing?.has_encrypted_api_key ?? false,
       selected_model: payload.selectedModel ?? "byok",
-      plan_tier: payload.planTier ?? "free",
+      plan_tier: existing?.plan_tier ?? "free",
       byok_provider: payload.byokProvider ?? "auto",
     };
 

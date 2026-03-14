@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { EXAMPLE_PROJECTS } from "@/lib/bowtie/examples";
 
 const problemPoints = [
   "Bowties are scattered across slides, docs, and whiteboards.",
@@ -113,8 +114,8 @@ export default function Home() {
                 >
                   Sign Up
                 </Link>
-                <Link href="/examples/ai-data-breach" className="brand-btn-secondary rounded-xl px-5 py-3 text-sm font-semibold">
-                  View Example Bowtie
+                <Link href="/examples" className="brand-btn-secondary rounded-xl px-5 py-3 text-sm font-semibold">
+                  View Example Bowties
                 </Link>
               </div>
             </div>
@@ -142,6 +143,58 @@ export default function Home() {
                   <div className="rounded border border-indigo-300 bg-indigo-50 p-2">Public safety impact</div>
                 </div>
               </div>
+            </div>
+          </section>
+
+          <section className="space-y-6">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <p className="brand-accent-chip inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wider">
+                  Public Canvases
+                </p>
+                <h2 className="brand-heading mt-3 text-3xl font-bold tracking-tight">Explore Example Bowties</h2>
+                <p className="brand-text-muted mt-2 max-w-3xl text-sm">
+                  Review full canvases across different industries before you create your own project.
+                </p>
+              </div>
+              <Link href="/examples" className="brand-btn-secondary rounded-xl px-5 py-3 text-sm font-semibold">
+                Browse All Examples
+              </Link>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              {EXAMPLE_PROJECTS.map((example) => (
+                <article key={example.slug} className="brand-card rounded-2xl bg-white p-5 shadow-sm">
+                  <p className="brand-accent-chip inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wider">
+                    {example.industry}
+                  </p>
+                  <h3 className="brand-heading mt-3 text-xl font-semibold">{example.title}</h3>
+                  <p className="brand-text-muted mt-2 text-sm">{example.summary}</p>
+                  <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-[#1F2933]/70">Top Event</p>
+                  <p className="mt-1 text-sm text-[#1F2933]">{example.topEvent}</p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {example.highlights.map((highlight) => (
+                      <span
+                        key={highlight}
+                        className="rounded-full border border-[#9CA3AF] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-[#1F2933]/80"
+                      >
+                        {highlight}
+                      </span>
+                    ))}
+                  </div>
+                  <Link
+                    href={`/examples/${example.slug}`}
+                    className="brand-btn-secondary mt-5 inline-flex rounded-xl px-4 py-2 text-sm font-semibold"
+                  >
+                    Open Example
+                  </Link>
+                  <Link
+                    href={`/examples/use/${example.slug}`}
+                    className="brand-btn-primary mt-2 inline-flex rounded-xl px-4 py-2 text-sm font-semibold"
+                  >
+                    Use as Template
+                  </Link>
+                </article>
+              ))}
             </div>
           </section>
 
@@ -227,18 +280,25 @@ export default function Home() {
 
           <section id="pricing" className="space-y-6">
             <h2 className="brand-heading text-3xl font-bold tracking-tight">Simple Pricing, Fast Start</h2>
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-3">
               <article className="brand-card rounded-2xl bg-white p-6 shadow-sm">
                 <h3 className="text-xl font-semibold">Free</h3>
-                <p className="brand-text-muted mt-1 text-sm">2 active projects, core bowtie builder, exports.</p>
+                <p className="brand-text-muted mt-1 text-sm">2 active projects, example templates, exports, BYOK AI.</p>
                 <p className="mt-4 text-3xl font-bold">$0</p>
               </article>
               <article className="brand-card rounded-2xl bg-white p-6 shadow-sm">
-                <h3 className="text-xl font-semibold">Pro / Team</h3>
+                <h3 className="text-xl font-semibold">Pro</h3>
                 <p className="mt-1 text-sm text-[#1F2933]">
-                  More projects, collaboration workflows, custom templates, advanced governance capability.
+                  Unlimited projects, exports, public examples as templates, and BYOK AI workflow.
                 </p>
-                <p className="mt-4 text-3xl font-bold">$10 / $30</p>
+                <p className="mt-4 text-3xl font-bold">$15</p>
+              </article>
+              <article className="brand-card rounded-2xl bg-white p-6 shadow-sm">
+                <h3 className="text-xl font-semibold">Consultant / Team</h3>
+                <p className="mt-1 text-sm text-[#1F2933]">
+                  For team rollouts, client workshop delivery, and tailored onboarding. Contact us for pilot setup.
+                </p>
+                <p className="mt-4 text-3xl font-bold">Contact</p>
               </article>
             </div>
             <p className="text-sm font-semibold text-[#1F2933]">No credit card required to start.</p>

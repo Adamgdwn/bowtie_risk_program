@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 interface Props {
@@ -13,7 +14,6 @@ interface Props {
 
 export function SettingsForm({ initialSettings }: Props) {
   const [apiKey, setApiKey] = useState("");
-  const [planTier, setPlanTier] = useState(initialSettings.plan_tier);
   const [selectedModel, setSelectedModel] = useState(initialSettings.selected_model ?? "byok");
   const [byokProvider, setByokProvider] = useState(initialSettings.byok_provider ?? "auto");
   const [message, setMessage] = useState("");
@@ -28,7 +28,6 @@ export function SettingsForm({ initialSettings }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           apiKey: apiKey || undefined,
-          planTier,
           selectedModel,
           byokProvider,
         }),
@@ -82,18 +81,12 @@ export function SettingsForm({ initialSettings }: Props) {
       <div className="brand-card rounded-2xl p-4">
         <h2 className="brand-heading text-sm font-semibold">Plan + LLM Mode</h2>
         <p className="brand-text-muted mt-1 text-sm">
-          Team tier managed model is currently a backend placeholder contract.
+          Your plan is managed through billing. Update subscriptions and payment methods on the billing page.
         </p>
         <div className="mt-3 grid gap-2 md:grid-cols-2">
-          <select
-            value={planTier}
-            onChange={(event) => setPlanTier(event.target.value as "free" | "pro" | "team")}
-            className="brand-select rounded-lg px-3 py-2 text-sm"
-          >
-            <option value="free">Free (2 projects, BYOK)</option>
-            <option value="pro">Pro $10 (unlimited, BYOK)</option>
-            <option value="team">Team $30 (unlimited, managed model)</option>
-          </select>
+          <div className="rounded-lg border border-[#9CA3AF] bg-white px-3 py-2 text-sm text-[#1F2933]">
+            Current plan: <strong className="capitalize">{initialSettings.plan_tier}</strong>
+          </div>
 
           <select
             value={selectedModel}
@@ -106,6 +99,9 @@ export function SettingsForm({ initialSettings }: Props) {
             <option value="managed-gemini">Managed Gemini (placeholder)</option>
           </select>
         </div>
+        <Link href="/billing" className="mt-3 inline-flex text-sm font-semibold text-[#325D88] underline underline-offset-2">
+          Open Billing
+        </Link>
       </div>
 
       <button

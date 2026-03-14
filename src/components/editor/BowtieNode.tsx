@@ -24,10 +24,13 @@ export default function BowtieNode({ id, data, selected }: NodeProps<BowtieNodeU
   const rightOptions = data.quickAddRight ?? [];
   const isEscalation =
     data.type === "escalation_factor" || data.type === "escalation_factor_control";
+  const isBarrier =
+    data.type === "preventive_barrier" || data.type === "mitigative_barrier";
   const supportLabel =
     data.supportLane === "mitigative" ? "Mitigative Support" : "Preventive Support";
   const supportAccent = data.supportLane === "mitigative" ? "#0ea5e9" : "#f59e0b";
   const supportBg = data.supportLane === "mitigative" ? "#f0f9ff" : "#fffbeb";
+  const barrierTint = data.type === "preventive_barrier" ? "#fff7e8" : "#ecfeff";
 
   function onAdd(side: "left" | "right", type: NodeType) {
     data.onQuickAdd?.(id, side, type);
@@ -90,25 +93,47 @@ export default function BowtieNode({ id, data, selected }: NodeProps<BowtieNodeU
       ) : null}
 
       <div
-        className="w-52 min-w-52 max-w-52 rounded-lg border-2 bg-white p-3 shadow-sm"
+        className={`${isBarrier ? "w-[120px] min-w-[120px] max-w-[120px] rounded-[28px] px-3 py-2" : "w-52 min-w-52 max-w-52 rounded-lg p-3"} border-2 bg-white shadow-sm`}
         style={{
           borderColor: meta.color,
-          backgroundColor: isEscalation ? supportBg : undefined,
+          backgroundColor: isEscalation ? supportBg : isBarrier ? barrierTint : undefined,
           borderLeftColor: isEscalation ? supportAccent : meta.color,
           borderLeftWidth: isEscalation ? 6 : 2,
           boxShadow: selected ? `0 0 0 3px ${meta.color}33` : undefined,
         }}
       >
+        {isBarrier ? (
+          <div
+            className="pointer-events-none absolute inset-x-3 top-1/2 h-[2px] -translate-y-1/2 rounded-full opacity-35"
+            style={{ backgroundColor: meta.color }}
+          />
+        ) : null}
+        {isBarrier ? (
+          <>
+            <div
+              className="pointer-events-none absolute bottom-2 left-2 top-2 w-[5px] rounded-full opacity-80"
+              style={{ backgroundColor: meta.color }}
+            />
+            <div
+              className="pointer-events-none absolute bottom-2 right-2 top-2 w-[5px] rounded-full opacity-80"
+              style={{ backgroundColor: meta.color }}
+            />
+          </>
+        ) : null}
         {isEscalation ? (
           <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
             {supportLabel}
           </div>
         ) : null}
-        <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{meta.label}</div>
-        <div className="mt-1 break-words whitespace-normal text-sm font-semibold leading-tight text-zinc-900">
+        <div className={`relative ${isBarrier ? "text-[9px] text-center" : "text-xs"} font-semibold uppercase tracking-wide text-zinc-500`}>
+          {isBarrier ? "Barrier" : meta.label}
+        </div>
+        <div
+          className={`relative mt-1 break-words whitespace-normal font-semibold text-zinc-900 ${isBarrier ? "text-center text-[12px] leading-[1.15]" : "text-sm leading-tight"}`}
+        >
           {data.title || "Untitled"}
         </div>
-        {data.description ? (
+        {data.description && !isBarrier ? (
           <div className="mt-1 break-words whitespace-pre-wrap text-xs leading-snug text-zinc-600">
             {data.description}
           </div>

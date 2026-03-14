@@ -21,6 +21,11 @@ export function AuthForm() {
   const [loading, setLoading] = useState(false);
   const [usernameLookup, setUsernameLookup] = useState<"available" | "taken" | null>(null);
   const [usernameChecking, setUsernameChecking] = useState(false);
+  const nextPath = useMemo(() => {
+    if (typeof window === "undefined") return "/dashboard";
+    const raw = new URLSearchParams(window.location.search).get("next") || "/dashboard";
+    return raw.startsWith("/") ? raw : "/dashboard";
+  }, []);
 
   const normalizedUsername = useMemo(() => username.trim().toLowerCase(), [username]);
   const usernameStatus = useMemo<"idle" | "checking" | "available" | "taken" | "invalid">(() => {
@@ -70,7 +75,7 @@ export function AuthForm() {
       if (error) {
         setMessage(error.message);
       } else {
-        router.push("/dashboard");
+        router.push(nextPath);
         router.refresh();
       }
     } else {
@@ -89,7 +94,7 @@ export function AuthForm() {
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/dashboard`,
+          emailRedirectTo: `${window.location.origin}${nextPath}`,
           data: {
             username: normalizedUsername,
           },

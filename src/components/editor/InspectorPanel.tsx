@@ -27,6 +27,37 @@ interface Props {
   onInsertSuggestions: (action: string, suggestions: Suggestion[]) => void;
 }
 
+const NODE_TYPE_HELP: Record<NodeType, { summary: string; example: string }> = {
+  top_event: {
+    summary: "State the exact moment control is lost, not the cause or the final impact.",
+    example: 'Example: "Sensitive data is exposed through an AI workflow."',
+  },
+  threat: {
+    summary: "Name a credible cause that could trigger the top event.",
+    example: 'Example: "Prompt injection bypasses content restrictions."',
+  },
+  preventive_barrier: {
+    summary: "Describe what stops the threat from reaching the top event.",
+    example: 'Example: "Prompt and output policy gateway blocks unsafe requests."',
+  },
+  consequence: {
+    summary: "Describe a direct outcome if the top event happens.",
+    example: 'Example: "Customer PII is exposed outside approved recipients."',
+  },
+  mitigative_barrier: {
+    summary: "Describe what limits harm after the top event has already occurred.",
+    example: 'Example: "Automated token revocation contains further access."',
+  },
+  escalation_factor: {
+    summary: "Name what could weaken or defeat a barrier when it is needed.",
+    example: 'Example: "After-hours staffing gap delays containment."',
+  },
+  escalation_factor_control: {
+    summary: "Describe the control that keeps the escalation factor from undermining the barrier.",
+    example: 'Example: "24/7 on-call roster covers the response gap."',
+  },
+};
+
 export function InspectorPanel({
   selectedNode,
   projectMeta,
@@ -44,16 +75,27 @@ export function InspectorPanel({
     if (!selectedNode) return [];
     const type = selectedNode.data?.type;
     if (type === "top_event") {
-      return ["Suggest threats", "Suggest consequences", "Suggest starter barriers"];
+      return ["Suggest threats", "Suggest consequences", "Suggest next logical nodes", "Improve wording"];
     }
     if (type === "threat") {
-      return ["Suggest preventive barriers", "Improve wording"];
+      return ["Suggest threats", "Suggest next logical nodes", "Improve wording"];
     }
     if (type === "consequence") {
-      return ["Suggest mitigative barriers", "Suggest escalation factors"];
+      return ["Suggest consequences", "Suggest next logical nodes", "Improve wording"];
     }
     if (type === "preventive_barrier" || type === "mitigative_barrier") {
-      return ["Improve barrier quality", "Suggest performance standard"];
+      return [
+        type === "preventive_barrier" ? "Suggest preventive barriers" : "Suggest mitigative barriers",
+        "Suggest next logical nodes",
+        "Improve barrier quality",
+        "Suggest performance standard",
+      ];
+    }
+    if (type === "escalation_factor") {
+      return ["Suggest escalation factors", "Suggest next logical nodes", "Improve wording"];
+    }
+    if (type === "escalation_factor_control") {
+      return ["Suggest escalation factor controls", "Suggest next logical nodes", "Improve wording"];
     }
     return ["Suggest improvements"];
   }, [selectedNode]);
@@ -106,15 +148,26 @@ export function InspectorPanel({
   if (!selectedNode) {
     return (
       <aside className="w-80 border-l border-[#9CA3AF] bg-[#E5E7EB] p-4 text-sm text-[#1F2933]/70">
-        Select a block to edit details and run AI suggestion actions.
+        <p>Select a block to edit details and run AI suggestion actions.</p>
+        <p className="mt-2 text-xs">
+          New users usually start by renaming the starter threat and consequence placeholders with specific wording.
+        </p>
       </aside>
     );
   }
+
+  const nodeHelp = NODE_TYPE_HELP[selectedNode.data.type];
 
   return (
     <aside className="w-80 border-l border-[#9CA3AF] bg-[#E5E7EB] p-4">
       <h3 className="text-sm font-semibold text-[#1F2933]">Inspector</h3>
       <p className="text-xs text-[#1F2933]/65">{selectedNode.data?.typeLabel}</p>
+
+      <div className="mt-3 rounded border border-[#9CA3AF] bg-white p-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-[#325D88]">What Belongs Here</p>
+        <p className="mt-1 text-xs text-[#1F2933]">{nodeHelp.summary}</p>
+        <p className="mt-2 text-[11px] text-[#1F2933]/70">{nodeHelp.example}</p>
+      </div>
 
       <label className="mt-3 block text-xs font-semibold text-[#1F2933]">Title</label>
       <input
@@ -132,6 +185,9 @@ export function InspectorPanel({
 
       <div className="mt-5">
         <h4 className="text-xs font-semibold uppercase tracking-wide text-[#1F2933]">AI Actions</h4>
+        <p className="mt-1 text-[11px] text-[#1F2933]/70">
+          Best after the title is specific enough that a teammate would understand it without extra context.
+        </p>
         <div className="mt-2 flex flex-wrap gap-2">
           {actions.map((action) => (
             <button

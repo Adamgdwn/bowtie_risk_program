@@ -336,6 +336,10 @@ export function WorkflowWorksheet({
           {projectMeta.title} | {projectMeta.industry} | Top Event:{" "}
           {state.step1TopEvent?.trim() || "Not set"}
         </p>
+        <div className="mt-3 rounded border border-[#9CA3AF] bg-[#F5F3F0] p-3 text-xs text-[#1F2933]/80">
+          Best for new users: complete Step 1 here first, then switch to Canvas to add named threats,
+          consequences, and barriers in the diagram.
+        </div>
         <p className="mt-2 text-sm text-zinc-700">
           Progress: <strong>{completionPercent}%</strong> ({Object.values(state.completed ?? {}).filter(Boolean).length}
           /{STEPS.length} steps)

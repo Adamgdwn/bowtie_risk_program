@@ -66,36 +66,274 @@ type ProviderResult = {
   suggestions: SuggestionItem[] | null;
   error?: string;
 };
+type GraphNodeSummary = {
+  id: string;
+  type: NodeType;
+  title: string;
+};
+type BranchContext = {
+  selectedNode: GraphNodeSummary;
+  incoming: GraphNodeSummary[];
+  outgoing: GraphNodeSummary[];
+  incomingByType: Partial<Record<NodeType, string[]>>;
+  outgoingByType: Partial<Record<NodeType, string[]>>;
+  branchInstruction: string;
+};
 
 export type ByokProvider = "openai" | "openrouter" | "anthropic" | "gemini";
 export type ByokProviderPreference = "auto" | ByokProvider;
 
-function inferNodeTypeFromAction(action: string, selectedType: NodeType): NodeType {
-  const normalized = action.toLowerCase();
-  if (normalized.includes("threat")) return "threat";
-  if (normalized.includes("consequence")) return "consequence";
-  if (normalized.includes("preventive")) return "preventive_barrier";
-  if (normalized.includes("mitigative")) return "mitigative_barrier";
-  if (normalized.includes("escalation factor")) return "escalation_factor";
-  if (normalized.includes("starter barriers")) {
-    return selectedType === "top_event" ? "preventive_barrier" : "mitigative_barrier";
+function normalizeSuggestionLabel(label?: string | null) {
+  return label?.trim().toLowerCase().replace(/\s+/g, " ") ?? "";
+}
+
+function toTitleCaseLabel(type: NodeType) {
+  return type.replaceAll("_", " ");
+}
+
+function buildTitlesByType(nodes: GraphNodeSummary[]) {
+  return nodes.reduce<Partial<Record<NodeType, string[]>>>((acc, node) => {
+    const current = acc[node.type] ?? [];
+    if (!current.includes(node.title)) {
+      current.push(node.title);
+      acc[node.type] = current;
+    }
+    return acc;
+  }, {});
+}
+
+function getExistingLabelsByType(input: SuggestionsInput) {
+  const existingByType: Partial<Record<NodeType, string[]>> = {};
+  for (const node of input.contextGraph?.nodes ?? []) {
+    const normalized = normalizeSuggestionLabel(node.data.title);
+    if (!normalized) continue;
+    const list = existingByType[node.data.type] ?? [];
+    if (!list.includes(normalized)) {
+      list.push(normalized);
+      existingByType[node.data.type] = list;
+    }
   }
-  return "preventive_barrier";
+  return existingByType;
+}
+
+function getBranchContext(input: SuggestionsInput): BranchContext {
+  const selectedId = input.selectedNode.id;
+  const nodeMap = new Map<string, GraphNodeSummary>(
+    (input.contextGraph?.nodes ?? []).map((node) => [
+      node.id,
+      {
+        id: node.id,
+        type: node.data.type,
+        title: node.data.title?.trim() || toTitleCaseLabel(node.data.type),
+      },
+    ]),
+  );
+
+  const fallbackSelected: GraphNodeSummary = {
+    id: input.selectedNode.id,
+    type: input.selectedNode.data.type,
+    title: input.selectedNode.data.title?.trim() || toTitleCaseLabel(input.selectedNode.data.type),
+  };
+  const selectedNode = nodeMap.get(selectedId) ?? fallbackSelected;
+
+  const incoming: GraphNodeSummary[] = [];
+  const outgoing: GraphNodeSummary[] = [];
+
+  for (const edge of input.contextGraph?.edges ?? []) {
+    if (edge.target === selectedId) {
+      const sourceNode = nodeMap.get(edge.source);
+      if (sourceNode) incoming.push(sourceNode);
+    }
+    if (edge.source === selectedId) {
+      const targetNode = nodeMap.get(edge.target);
+      if (targetNode) outgoing.push(targetNode);
+    }
+  }
+
+  const incomingByType = buildTitlesByType(incoming);
+  const outgoingByType = buildTitlesByType(outgoing);
+
+  let branchInstruction = `Keep suggestions anchored to "${selectedNode.title}" and its immediate bowtie branch.`;
+  switch (selectedNode.type) {
+    case "top_event":
+      branchInstruction =
+        `Use "${selectedNode.title}" as the central loss-of-control event. Suggest causes or direct outcomes that are not already shown on either side.`;
+      break;
+    case "threat":
+      branchInstruction =
+        `Treat "${selectedNode.title}" as a specific cause of the top event. Suggestions must prevent or clarify this threat branch, not the whole bowtie generically.`;
+      break;
+    case "preventive_barrier":
+      branchInstruction =
+        `Treat "${selectedNode.title}" as a preventive barrier on a single threat branch. Suggestions must strengthen this barrier or address what could degrade it.`;
+      break;
+    case "consequence":
+      branchInstruction =
+        `Treat "${selectedNode.title}" as a direct consequence of the top event. Suggestions must mitigate or clarify this consequence branch specifically.`;
+      break;
+    case "mitigative_barrier":
+      branchInstruction =
+        `Treat "${selectedNode.title}" as a mitigative barrier on a consequence branch. Suggestions must strengthen post-event response for this branch or address what could degrade it.`;
+      break;
+    case "escalation_factor":
+      branchInstruction =
+        `Treat "${selectedNode.title}" as something that weakens a barrier. Suggestions must stay focused on this degradation path and how it is controlled.`;
+      break;
+    case "escalation_factor_control":
+      branchInstruction =
+        `Treat "${selectedNode.title}" as the control that protects a barrier from degradation. Suggestions must stay focused on this escalation-control logic.`;
+      break;
+  }
+
+  return {
+    selectedNode,
+    incoming,
+    outgoing,
+    incomingByType,
+    outgoingByType,
+    branchInstruction,
+  };
+}
+
+function dedupeSuggestions(
+  suggestions: SuggestionItem[],
+  input: SuggestionsInput,
+  suggestedTypes: NodeType[],
+) {
+  const existingByType = getExistingLabelsByType(input);
+  const seen = new Set<string>();
+
+  return suggestions.filter((item, index) => {
+    const nodeType = item.nodeType ?? suggestedTypes[index % suggestedTypes.length] ?? suggestedTypes[0];
+    const normalized = normalizeSuggestionLabel(item.label);
+    if (!normalized) return false;
+
+    const existingForType = new Set(existingByType[nodeType] ?? []);
+    if (existingForType.has(normalized)) {
+      return false;
+    }
+
+    const key = `${nodeType}:${normalized}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
+function getNextLogicalNodeTypes(selectedType: NodeType): NodeType[] {
+  switch (selectedType) {
+    case "top_event":
+      return ["threat", "consequence"];
+    case "threat":
+      return ["preventive_barrier"];
+    case "preventive_barrier":
+      return ["escalation_factor"];
+    case "consequence":
+      return ["mitigative_barrier"];
+    case "mitigative_barrier":
+      return ["consequence", "escalation_factor"];
+    case "escalation_factor":
+      return ["escalation_factor_control"];
+    case "escalation_factor_control":
+      return ["escalation_factor"];
+    default:
+      return ["preventive_barrier"];
+  }
+}
+
+function inferNodeTypesFromAction(action: string, selectedType: NodeType): NodeType[] {
+  const normalized = action.toLowerCase();
+  if (normalized.includes("next logical")) return getNextLogicalNodeTypes(selectedType);
+  if (normalized.includes("escalation factor control")) return ["escalation_factor_control"];
+  if (normalized.includes("threat")) return ["threat"];
+  if (normalized.includes("consequence")) return ["consequence"];
+  if (normalized.includes("preventive")) return ["preventive_barrier"];
+  if (normalized.includes("mitigative")) return ["mitigative_barrier"];
+  if (normalized.includes("escalation factor")) return ["escalation_factor"];
+  if (normalized.includes("starter barriers")) {
+    return [selectedType === "top_event" ? "preventive_barrier" : "mitigative_barrier"];
+  }
+  if (normalized.includes("top event")) return ["top_event"];
+  return ["preventive_barrier"];
+}
+
+function fallbackLabelForType(
+  nodeType: NodeType,
+  input: SuggestionsInput,
+  branchContext: BranchContext,
+  variantIndex: number,
+): string {
+  const selectedTitle = branchContext.selectedNode.title;
+  const downstreamConsequence = branchContext.outgoingByType.consequence?.[0];
+  const upstreamThreat = branchContext.incomingByType.threat?.[0];
+  const connectedBarrier =
+    branchContext.incomingByType.preventive_barrier?.[0] ??
+    branchContext.outgoingByType.preventive_barrier?.[0] ??
+    branchContext.incomingByType.mitigative_barrier?.[0] ??
+    branchContext.outgoingByType.mitigative_barrier?.[0];
+  switch (nodeType) {
+    case "threat":
+      return [
+        `${input.project.industry} process deviation around ${selectedTitle}`,
+        `Human error contributing to ${input.project.topEvent}`,
+        `External dependency failure affecting ${input.project.topEvent}`,
+      ][variantIndex % 3];
+    case "preventive_barrier":
+      return [
+        `Preventive control for ${selectedTitle}`,
+        `Verification step that stops ${selectedTitle}`,
+        `${input.project.industry} operating guardrail`,
+      ][variantIndex % 3];
+    case "consequence":
+      return [
+        `Operational impact after ${input.project.topEvent}`,
+        `Safety or stakeholder harm from ${selectedTitle}`,
+        `Regulatory or financial consequence of ${input.project.topEvent}`,
+      ][variantIndex % 3];
+    case "mitigative_barrier":
+      return [
+        `Containment response for ${selectedTitle}`,
+        `Escalation and recovery control for ${downstreamConsequence ?? input.project.topEvent}`,
+        `Incident response barrier for ${input.project.industry}`,
+      ][variantIndex % 3];
+    case "escalation_factor":
+      return [
+        `Condition that weakens ${connectedBarrier ?? selectedTitle}`,
+        `Staffing or maintenance issue affecting ${connectedBarrier ?? selectedTitle}`,
+        `Change pressure undermining ${connectedBarrier ?? selectedTitle}`,
+      ][variantIndex % 3];
+    case "escalation_factor_control":
+      return [
+        `Control that protects ${selectedTitle}`,
+        `Verification step that keeps ${connectedBarrier ?? selectedTitle} effective`,
+        `Oversight measure supporting ${upstreamThreat ?? selectedTitle}`,
+      ][variantIndex % 3];
+    case "top_event":
+      return [
+        `Loss of control involving ${input.project.industry} operations`,
+        `Critical event centered on ${selectedTitle}`,
+        `Top event phrasing for ${input.project.title}`,
+      ][variantIndex % 3];
+    default:
+      return `${input.project.industry} risk item`;
+  }
 }
 
 function fallbackSuggestions(input: SuggestionsInput): SuggestionItem[] {
-  const suggestedType = inferNodeTypeFromAction(input.action, input.selectedNode.data.type);
-  const base = [
-    `${input.project.industry} operational upset`,
-    `${input.project.industry} equipment failure`,
-    `Human factors under ${input.project.topEvent}`,
-  ];
-  return base.map((value, index) => ({
-    id: `s-${index + 1}`,
-    label: value,
-    description: `Suggested for ${input.action}`,
-    nodeType: suggestedType,
-  }));
+  const suggestedTypes = inferNodeTypesFromAction(input.action, input.selectedNode.data.type);
+  const branchContext = getBranchContext(input);
+  const rawSuggestions = Array.from({ length: 8 }, (_, index) => {
+    const nodeType = suggestedTypes[index % suggestedTypes.length] ?? "preventive_barrier";
+    return {
+      id: `s-${index + 1}`,
+      label: fallbackLabelForType(nodeType, input, branchContext, index),
+      description: `Suggested for ${input.action} in ${input.project.industry}.`,
+      nodeType,
+    };
+  });
+  return dedupeSuggestions(rawSuggestions, input, suggestedTypes).slice(0, 5);
 }
 
 function extractJsonObject(text: string) {
@@ -159,7 +397,9 @@ async function readProviderError(response: Response): Promise<string> {
   return fallback;
 }
 
-function buildPromptPayload(input: SuggestionsInput, suggestedType: NodeType) {
+function buildPromptPayload(input: SuggestionsInput, suggestedTypes: NodeType[]) {
+  const existingLabelsByType = getExistingLabelsByType(input);
+  const branchContext = getBranchContext(input);
   const graphSummary = {
     nodeCount: input.contextGraph?.nodes.length ?? 0,
     edgeCount: input.contextGraph?.edges.length ?? 0,
@@ -171,7 +411,16 @@ function buildPromptPayload(input: SuggestionsInput, suggestedType: NodeType) {
   };
   return {
     task: input.action,
-    suggestedNodeType: suggestedType,
+    suggestedNodeTypes: suggestedTypes,
+    existingNodeLabelsByType: existingLabelsByType,
+    branchContext: {
+      selectedNode: branchContext.selectedNode,
+      incoming: branchContext.incoming,
+      outgoing: branchContext.outgoing,
+      incomingByType: branchContext.incomingByType,
+      outgoingByType: branchContext.outgoingByType,
+      instruction: branchContext.branchInstruction,
+    },
     project: input.project,
     selectedNode: input.selectedNode,
     graphSummary,
@@ -180,18 +429,14 @@ function buildPromptPayload(input: SuggestionsInput, suggestedType: NodeType) {
       "Return 5 suggestions when possible.",
       "Each suggestion label must be concise and actionable.",
       "Descriptions should mention why the suggestion fits this top event and industry.",
+      "If the task asks for next logical nodes, only suggest node types that would connect directly to the selected node in a bowtie.",
+      "Do not repeat or closely paraphrase existing node titles already present in the graph for the same node type.",
+      "Use the selected branch context, including immediate upstream and downstream connected nodes, to keep suggestions branch-specific.",
     ],
     outputSchema: {
       suggestions: [{ label: "string", description: "string", nodeType: "node_type" }],
     },
-    validNodeTypes: [
-      "threat",
-      "preventive_barrier",
-      "consequence",
-      "mitigative_barrier",
-      "escalation_factor",
-      "escalation_factor_control",
-    ],
+    validNodeTypes: suggestedTypes,
   };
 }
 
@@ -200,8 +445,8 @@ async function getOpenAiSuggestions(
   apiKey: string,
 ): Promise<ProviderResult> {
   const selectedType = input.selectedNode.data.type;
-  const suggestedType = inferNodeTypeFromAction(input.action, selectedType);
-  const prompt = buildPromptPayload(input, suggestedType);
+  const suggestedTypes = inferNodeTypesFromAction(input.action, selectedType);
+  const prompt = buildPromptPayload(input, suggestedTypes);
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -281,13 +526,21 @@ async function getOpenAiSuggestions(
     if (!parsedList.success || parsedList.data.length === 0) {
       return { suggestions: null, error: "No valid suggestions in provider response." };
     }
-    return {
-      suggestions: parsedList.data.map((item, index) => ({
+    const deduped = dedupeSuggestions(
+      parsedList.data.map((item, index) => ({
         id: `s-${index + 1}`,
         label: item.label,
         description: item.description,
-        nodeType: item.nodeType ?? suggestedType,
+        nodeType: item.nodeType ?? suggestedTypes[index % suggestedTypes.length] ?? suggestedTypes[0],
       })),
+      input,
+      suggestedTypes,
+    );
+    if (deduped.length === 0) {
+      return { suggestions: null, error: "Provider suggestions were duplicates of the current graph." };
+    }
+    return {
+      suggestions: deduped.slice(0, 5),
     };
   } catch {
     return { suggestions: null, error: "Failed to parse provider JSON output." };
@@ -299,8 +552,8 @@ async function getOpenRouterSuggestions(
   apiKey: string,
 ): Promise<ProviderResult> {
   const selectedType = input.selectedNode.data.type;
-  const suggestedType = inferNodeTypeFromAction(input.action, selectedType);
-  const prompt = buildPromptPayload(input, suggestedType);
+  const suggestedTypes = inferNodeTypesFromAction(input.action, selectedType);
+  const prompt = buildPromptPayload(input, suggestedTypes);
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -337,13 +590,21 @@ async function getOpenRouterSuggestions(
     if (!parsedList.success || parsedList.data.length === 0) {
       return { suggestions: null, error: "No valid suggestions in provider response." };
     }
-    return {
-      suggestions: parsedList.data.map((item, index) => ({
+    const deduped = dedupeSuggestions(
+      parsedList.data.map((item, index) => ({
         id: `s-${index + 1}`,
         label: item.label,
         description: item.description,
-        nodeType: item.nodeType ?? suggestedType,
+        nodeType: item.nodeType ?? suggestedTypes[index % suggestedTypes.length] ?? suggestedTypes[0],
       })),
+      input,
+      suggestedTypes,
+    );
+    if (deduped.length === 0) {
+      return { suggestions: null, error: "Provider suggestions were duplicates of the current graph." };
+    }
+    return {
+      suggestions: deduped.slice(0, 5),
     };
   } catch {
     return { suggestions: null, error: "Failed to parse provider JSON output." };
@@ -355,8 +616,8 @@ async function getAnthropicSuggestions(
   apiKey: string,
 ): Promise<ProviderResult> {
   const selectedType = input.selectedNode.data.type;
-  const suggestedType = inferNodeTypeFromAction(input.action, selectedType);
-  const prompt = buildPromptPayload(input, suggestedType);
+  const suggestedTypes = inferNodeTypesFromAction(input.action, selectedType);
+  const prompt = buildPromptPayload(input, suggestedTypes);
 
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -387,13 +648,21 @@ async function getAnthropicSuggestions(
     if (!parsedList.success || parsedList.data.length === 0) {
       return { suggestions: null, error: "No valid suggestions in provider response." };
     }
-    return {
-      suggestions: parsedList.data.map((item, index) => ({
+    const deduped = dedupeSuggestions(
+      parsedList.data.map((item, index) => ({
         id: `s-${index + 1}`,
         label: item.label,
         description: item.description,
-        nodeType: item.nodeType ?? suggestedType,
+        nodeType: item.nodeType ?? suggestedTypes[index % suggestedTypes.length] ?? suggestedTypes[0],
       })),
+      input,
+      suggestedTypes,
+    );
+    if (deduped.length === 0) {
+      return { suggestions: null, error: "Provider suggestions were duplicates of the current graph." };
+    }
+    return {
+      suggestions: deduped.slice(0, 5),
     };
   } catch {
     return { suggestions: null, error: "Failed to parse provider JSON output." };
@@ -405,8 +674,8 @@ async function getGeminiSuggestions(
   apiKey: string,
 ): Promise<ProviderResult> {
   const selectedType = input.selectedNode.data.type;
-  const suggestedType = inferNodeTypeFromAction(input.action, selectedType);
-  const prompt = buildPromptPayload(input, suggestedType);
+  const suggestedTypes = inferNodeTypesFromAction(input.action, selectedType);
+  const prompt = buildPromptPayload(input, suggestedTypes);
   const model = process.env.GEMINI_MODEL || "gemini-1.5-flash";
 
   const response = await fetch(
@@ -447,13 +716,21 @@ async function getGeminiSuggestions(
     if (!parsedList.success || parsedList.data.length === 0) {
       return { suggestions: null, error: "No valid suggestions in provider response." };
     }
-    return {
-      suggestions: parsedList.data.map((item, index) => ({
+    const deduped = dedupeSuggestions(
+      parsedList.data.map((item, index) => ({
         id: `s-${index + 1}`,
         label: item.label,
         description: item.description,
-        nodeType: item.nodeType ?? suggestedType,
+        nodeType: item.nodeType ?? suggestedTypes[index % suggestedTypes.length] ?? suggestedTypes[0],
       })),
+      input,
+      suggestedTypes,
+    );
+    if (deduped.length === 0) {
+      return { suggestions: null, error: "Provider suggestions were duplicates of the current graph." };
+    }
+    return {
+      suggestions: deduped.slice(0, 5),
     };
   } catch {
     return { suggestions: null, error: "Failed to parse provider JSON output." };

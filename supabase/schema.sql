@@ -46,12 +46,20 @@ create table if not exists public.user_settings (
   byok_provider text not null default 'auto' check (byok_provider in ('auto', 'openai', 'openrouter', 'anthropic', 'gemini')),
   selected_model text not null default 'byok',
   plan_tier text not null default 'free' check (plan_tier in ('free', 'pro', 'team')),
+  stripe_customer_id text,
+  stripe_subscription_id text,
+  stripe_price_id text,
+  stripe_subscription_status text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
 alter table public.user_settings add column if not exists username text;
 alter table public.user_settings add column if not exists email text;
+alter table public.user_settings add column if not exists stripe_customer_id text;
+alter table public.user_settings add column if not exists stripe_subscription_id text;
+alter table public.user_settings add column if not exists stripe_price_id text;
+alter table public.user_settings add column if not exists stripe_subscription_status text;
 create unique index if not exists user_settings_username_unique on public.user_settings (username) where username is not null;
 create unique index if not exists user_settings_email_unique on public.user_settings (email) where email is not null;
 

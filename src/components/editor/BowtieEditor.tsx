@@ -45,6 +45,25 @@ interface ClipboardSnapshot {
 type ExportFormat = "png" | "pdf";
 type ExportScope = "canvas" | "worksheet" | "both";
 type ExportSize = "small" | "medium" | "large";
+type EditorViewMode = "canvas" | "worksheet";
+
+interface GuidedStep {
+  id: string;
+  title: string;
+  detail: string;
+  done: boolean;
+  preferredView: EditorViewMode;
+}
+
+interface GuidedCounts {
+  hasTopEvent: boolean;
+  threats: number;
+  consequences: number;
+  preventiveBarriers: number;
+  mitigativeBarriers: number;
+  escalationFactors: number;
+  escalationFactorControls: number;
+}
 
 interface Props {
   projectId: string;
@@ -61,12 +80,45 @@ interface Props {
 }
 
 const nodeTypes = { bowtieNode: BowtieNode };
-const LANE_WIDTH = 250;
 const LANE_START_X = 0;
-const LANE_START_Y = -120;
-const LANE_HEIGHT = 2200;
+const LANE_BASE_START_Y = -120;
+const LANE_BASE_HEIGHT = 2200;
 const DEFAULT_NODE_WIDTH = 208;
-const DEFAULT_VIEWPORT = { x: 0, y: 80, zoom: 0.72 };
+const SUPPORT_NODE_WIDTH = 176;
+const BARRIER_NODE_WIDTH = 120;
+const BARRIER_COLUMNS = 3;
+const BARRIER_COLUMN_GAP = 18;
+const BARRIER_LANE_PADDING = 28;
+const BARRIER_LANE_WIDTH =
+  BARRIER_LANE_PADDING * 2 +
+  BARRIER_COLUMNS * BARRIER_NODE_WIDTH +
+  (BARRIER_COLUMNS - 1) * BARRIER_COLUMN_GAP;
+const LANE_WIDTHS = [250, BARRIER_LANE_WIDTH, 250, BARRIER_LANE_WIDTH, 250] as const;
+const LANE_STARTS = LANE_WIDTHS.reduce<number[]>((starts, width, index) => {
+  if (index === 0) {
+    starts.push(LANE_START_X);
+    return starts;
+  }
+  starts.push(starts[index - 1] + LANE_WIDTHS[index - 1]);
+  return starts;
+}, []);
+const LANE_LABEL_HEIGHT = 48;
+const BARRIER_ROW_GAP = 118;
+const BRANCH_CLEARANCE = 42;
+const POSITION_PUSH_STEP = 28;
+const MAX_POSITION_ATTEMPTS = 48;
+const NODE_FOOTPRINTS: Record<NodeType, { width: number; height: number }> = {
+  top_event: { width: DEFAULT_NODE_WIDTH, height: 116 },
+  threat: { width: DEFAULT_NODE_WIDTH, height: 116 },
+  preventive_barrier: { width: BARRIER_NODE_WIDTH, height: 76 },
+  consequence: { width: DEFAULT_NODE_WIDTH, height: 116 },
+  mitigative_barrier: { width: BARRIER_NODE_WIDTH, height: 76 },
+  escalation_factor: { width: SUPPORT_NODE_WIDTH, height: 90 },
+  escalation_factor_control: { width: SUPPORT_NODE_WIDTH, height: 90 },
+};
+const LANE_TOP_PADDING = 220;
+const LANE_BOTTOM_PADDING = 320;
+const DEFAULT_VIEWPORT = { x: -120, y: 80, zoom: 0.62 };
 const EXPORT_PIXEL_RATIO: Record<ExportSize, number> = {
   small: 1.4,
   medium: 2,
@@ -77,6 +129,15 @@ const PDF_FORMAT_BY_SIZE: Record<ExportSize, "a4" | "a3" | "a2"> = {
   medium: "a3",
   large: "a2",
 };
+const GENERIC_NODE_TITLES: Record<NodeType, string[]> = {
+  top_event: ["top event"],
+  threat: ["threat"],
+  preventive_barrier: ["preventive barrier"],
+  consequence: ["consequence"],
+  mitigative_barrier: ["mitigative barrier"],
+  escalation_factor: ["escalation factor"],
+  escalation_factor_control: ["escalation factor control"],
+};
 
 const LANE_META: Array<{ label: string; className: string }> = [
   { label: "Threats", className: "border-r border-[#9CA3AF]/70 bg-[#f0f3f6]" },
@@ -86,8 +147,46 @@ const LANE_META: Array<{ label: string; className: string }> = [
   { label: "Consequences", className: "bg-[#f1f4f8]" },
 ];
 
-function laneXForType(type: NodeType, mitigativeColumns = 1) {
+interface LayoutData extends Partial<BowtieNodeData> {
+  barrierIndex?: number;
+}
+
+function laneStartForIndex(index: number) {
+  return LANE_STARTS[index] ?? LANE_START_X;
+}
+
+function gridSlotForBarrier(index: number) {
+  const safeIndex = Math.max(0, index);
+  return {
+    column: safeIndex % BARRIER_COLUMNS,
+    row: Math.floor(safeIndex / BARRIER_COLUMNS),
+  };
+}
+
+function barrierLaneX(lane: "preventive" | "mitigative", index: number) {
+  const laneIndex = lane === "preventive" ? 1 : 3;
+  const { column } = gridSlotForBarrier(index);
+  return laneStartForIndex(laneIndex) + BARRIER_LANE_PADDING + column * (BARRIER_NODE_WIDTH + BARRIER_COLUMN_GAP);
+}
+
+function barrierRowOffset(index: number) {
+  return gridSlotForBarrier(index).row * BARRIER_ROW_GAP;
+}
+
+function laneXForType(type: NodeType, layoutData: LayoutData = {}) {
   const lane = NODE_TYPE_META[type].lane;
+  if (type === "preventive_barrier") {
+    return barrierLaneX("preventive", layoutData.barrierIndex ?? 0);
+  }
+  if (type === "mitigative_barrier") {
+    return barrierLaneX("mitigative", layoutData.chainIndex ?? 0);
+  }
+  if (type === "escalation_factor" || type === "escalation_factor_control") {
+    if (typeof layoutData.supportAnchorX === "number") {
+      return layoutData.supportAnchorX;
+    }
+    return barrierLaneX(layoutData.supportLane ?? "preventive", 0);
+  }
   const laneIndex =
     lane === "left"
       ? 0
@@ -97,40 +196,65 @@ function laneXForType(type: NodeType, mitigativeColumns = 1) {
           ? 2
           : lane === "center-right"
             ? 3
-            : 4 + (mitigativeColumns - 1);
-  return LANE_START_X + laneIndex * LANE_WIDTH + (LANE_WIDTH - DEFAULT_NODE_WIDTH) / 2;
+            : 4;
+  const width = NODE_FOOTPRINTS[type].width;
+  return laneStartForIndex(laneIndex) + (LANE_WIDTHS[laneIndex] - width) / 2;
 }
 
 function supportLaneForNode(
   node: Node<BowtieNodeData> | null | undefined,
-  mitigativeColumns = 1,
+  _mitigativeColumns = 1,
 ): "preventive" | "mitigative" {
+  void _mitigativeColumns;
   if (!node) return "preventive";
   if (node.data.type === "mitigative_barrier") return "mitigative";
   if (node.data.type === "preventive_barrier") return "preventive";
   if (node.data.supportLane) return node.data.supportLane;
   if (node.data.type === "escalation_factor" || node.data.type === "escalation_factor_control") {
-    const laneThreeX = LANE_START_X + 3 * LANE_WIDTH;
-    const mitigativeEdgeX = laneThreeX + mitigativeColumns * LANE_WIDTH;
-    return node.position.x >= laneThreeX && node.position.x < mitigativeEdgeX ? "mitigative" : "preventive";
+    const mitigativeLaneStart = laneStartForIndex(3);
+    const consequenceLaneStart = laneStartForIndex(4);
+    return node.position.x >= mitigativeLaneStart && node.position.x < consequenceLaneStart ? "mitigative" : "preventive";
   }
   return "preventive";
 }
 
-function laneXForNode(type: NodeType, data?: Partial<BowtieNodeData>, mitigativeColumns = 1) {
-  if (type === "escalation_factor" || type === "escalation_factor_control") {
-    if (typeof data?.supportAnchorX === "number") {
-      return data.supportAnchorX;
+function laneXForNode(type: NodeType, data?: LayoutData, _mitigativeColumns = 1) {
+  void _mitigativeColumns;
+  return laneXForType(type, data ?? {});
+}
+
+function boxesOverlap(
+  candidate: { x: number; y: number; type: NodeType },
+  other: Node<BowtieNodeData>,
+) {
+  const candidateFootprint = NODE_FOOTPRINTS[candidate.type];
+  const otherFootprint = NODE_FOOTPRINTS[other.data.type];
+
+  return (
+    candidate.x < other.position.x + otherFootprint.width + 18 &&
+    candidate.x + candidateFootprint.width > other.position.x - 18 &&
+    candidate.y < other.position.y + otherFootprint.height + 22 &&
+    candidate.y + candidateFootprint.height > other.position.y - 22
+  );
+}
+
+function findNonOverlappingPosition(
+  candidate: { x: number; y: number; type: NodeType },
+  existingNodes: Node<BowtieNodeData>[],
+) {
+  let next = { x: candidate.x, y: candidate.y };
+
+  for (let attempt = 0; attempt < MAX_POSITION_ATTEMPTS; attempt += 1) {
+    const hasOverlap = existingNodes.some((node) =>
+      boxesOverlap({ x: next.x, y: next.y, type: candidate.type }, node),
+    );
+    if (!hasOverlap) {
+      return next;
     }
-    const supportLane = data?.supportLane ?? "preventive";
-    const laneIndex = supportLane === "mitigative" ? 3 : 1;
-    return LANE_START_X + laneIndex * LANE_WIDTH + (LANE_WIDTH - DEFAULT_NODE_WIDTH) / 2;
+    next = { ...next, y: next.y + POSITION_PUSH_STEP };
   }
-  if (type === "mitigative_barrier" && typeof data?.chainIndex === "number") {
-    const clampedIndex = Math.max(0, Math.min(data.chainIndex, mitigativeColumns - 1));
-    return LANE_START_X + (3 + clampedIndex) * LANE_WIDTH + (LANE_WIDTH - DEFAULT_NODE_WIDTH) / 2;
-  }
-  return laneXForType(type, mitigativeColumns);
+
+  return next;
 }
 
 function cloneSnapshot<T>(value: T): T {
@@ -143,6 +267,134 @@ function stripPersistedUiState(data: BowtieNodeData): BowtieNodeData {
     collapsedLeft: undefined,
     collapsedRight: undefined,
   };
+}
+
+function normalizeTitle(title?: string | null) {
+  return title?.trim().toLowerCase() ?? "";
+}
+
+function isMeaningfulNodeTitle(type: NodeType, title?: string | null) {
+  const normalized = normalizeTitle(title);
+  if (!normalized || normalized === "untitled") {
+    return false;
+  }
+  return !GENERIC_NODE_TITLES[type].includes(normalized);
+}
+
+function getGuidedCounts(nodes: Node<BowtieNodeData>[]): GuidedCounts {
+  return nodes.reduce<GuidedCounts>(
+    (counts, node) => {
+      if (!isMeaningfulNodeTitle(node.data.type, node.data.title)) {
+        return counts;
+      }
+
+      switch (node.data.type) {
+        case "top_event":
+          counts.hasTopEvent = true;
+          return counts;
+        case "threat":
+          counts.threats += 1;
+          return counts;
+        case "consequence":
+          counts.consequences += 1;
+          return counts;
+        case "preventive_barrier":
+          counts.preventiveBarriers += 1;
+          return counts;
+        case "mitigative_barrier":
+          counts.mitigativeBarriers += 1;
+          return counts;
+        case "escalation_factor":
+          counts.escalationFactors += 1;
+          return counts;
+        case "escalation_factor_control":
+          counts.escalationFactorControls += 1;
+          return counts;
+        default:
+          return counts;
+      }
+    },
+    {
+      hasTopEvent: false,
+      threats: 0,
+      consequences: 0,
+      preventiveBarriers: 0,
+      mitigativeBarriers: 0,
+      escalationFactors: 0,
+      escalationFactorControls: 0,
+    },
+  );
+}
+
+function getGuidedSteps(counts: GuidedCounts): GuidedStep[] {
+  return [
+    {
+      id: "top_event",
+      title: "Define a clear top event",
+      detail: counts.hasTopEvent
+        ? "Your top event is named. Keep it focused on the loss-of-control moment."
+        : "Use the worksheet to phrase the top event in one specific sentence.",
+      done: counts.hasTopEvent,
+      preferredView: "worksheet",
+    },
+    {
+      id: "threats",
+      title: "Name at least two credible threats",
+      detail: `${counts.threats}/2 named threats. Rename the starter placeholder, then add more causes on the left side.`,
+      done: counts.threats >= 2,
+      preferredView: "canvas",
+    },
+    {
+      id: "consequences",
+      title: "Name at least two consequences",
+      detail: `${counts.consequences}/2 named consequences. Capture direct outcomes on the right side.`,
+      done: counts.consequences >= 2,
+      preferredView: "canvas",
+    },
+    {
+      id: "barriers",
+      title: "Add barriers on both sides",
+      detail: `${counts.preventiveBarriers} preventive and ${counts.mitigativeBarriers} mitigative barriers named so far.`,
+      done: counts.preventiveBarriers >= 1 && counts.mitigativeBarriers >= 1,
+      preferredView: "canvas",
+    },
+    {
+      id: "escalation",
+      title: "Add one escalation factor and one control",
+      detail: `${counts.escalationFactors} factors and ${counts.escalationFactorControls} controls named so far.`,
+      done: counts.escalationFactors >= 1 && counts.escalationFactorControls >= 1,
+      preferredView: "canvas",
+    },
+  ];
+}
+
+function shouldOpenInWorksheet(nodes: Node<BowtieNodeData>[]) {
+  const nodeTypeCounts = nodes.reduce<Record<NodeType, number>>(
+    (counts, node) => {
+      counts[node.data.type] += 1;
+      return counts;
+    },
+    {
+      top_event: 0,
+      threat: 0,
+      preventive_barrier: 0,
+      consequence: 0,
+      mitigative_barrier: 0,
+      escalation_factor: 0,
+      escalation_factor_control: 0,
+    },
+  );
+
+  return (
+    nodes.length <= 3 &&
+    nodeTypeCounts.top_event === 1 &&
+    nodeTypeCounts.threat <= 1 &&
+    nodeTypeCounts.consequence <= 1 &&
+    nodeTypeCounts.preventive_barrier === 0 &&
+    nodeTypeCounts.mitigative_barrier === 0 &&
+    nodeTypeCounts.escalation_factor === 0 &&
+    nodeTypeCounts.escalation_factor_control === 0
+  );
 }
 
 function findNearestNodeByType(
@@ -188,23 +440,154 @@ function getMitigativeChainForConsequence(
   return chainFromConsequence.reverse();
 }
 
+function computePreventiveBarrierIndexById(
+  nodes: Node<BowtieNodeData>[],
+  edges: Edge[],
+): {
+  indexByNodeId: Record<string, number>;
+  threatIdByNodeId: Record<string, string>;
+  barrierIdsByThreatId: Record<string, string[]>;
+} {
+  const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+  const barrierIdsByThreatId: Record<string, string[]> = {};
+  const threatIdByNodeId: Record<string, string> = {};
+
+  for (const edge of edges) {
+    const sourceNode = nodeMap.get(edge.source);
+    const targetNode = nodeMap.get(edge.target);
+    if (sourceNode?.data.type !== "threat" || targetNode?.data.type !== "preventive_barrier") {
+      continue;
+    }
+    barrierIdsByThreatId[sourceNode.id] = [...(barrierIdsByThreatId[sourceNode.id] ?? []), targetNode.id];
+    threatIdByNodeId[targetNode.id] = sourceNode.id;
+  }
+
+  const indexByNodeId: Record<string, number> = {};
+  Object.entries(barrierIdsByThreatId).forEach(([threatId, barrierIds]) => {
+    const ordered = [...barrierIds].sort((leftId, rightId) => {
+      const leftNode = nodeMap.get(leftId);
+      const rightNode = nodeMap.get(rightId);
+      if (!leftNode || !rightNode) return 0;
+      return leftNode.position.y - rightNode.position.y || leftNode.position.x - rightNode.position.x;
+    });
+
+    barrierIdsByThreatId[threatId] = ordered;
+    ordered.forEach((nodeId, index) => {
+      indexByNodeId[nodeId] = index;
+    });
+  });
+
+  return { indexByNodeId, threatIdByNodeId, barrierIdsByThreatId };
+}
+
 function computeMitigativeChainIndexById(
   nodes: Node<BowtieNodeData>[],
   edges: Edge[],
-): { indexByNodeId: Record<string, number>; maxDepth: number } {
+): {
+  indexByNodeId: Record<string, number>;
+  consequenceIdByNodeId: Record<string, string>;
+  chainNodeIdsByConsequenceId: Record<string, string[]>;
+  maxDepth: number;
+} {
   const indexByNodeId: Record<string, number> = {};
+  const consequenceIdByNodeId: Record<string, string> = {};
+  const chainNodeIdsByConsequenceId: Record<string, string[]> = {};
   let maxDepth = 1;
   const consequences = nodes.filter((node) => node.data.type === "consequence");
   for (const consequence of consequences) {
     const chain = getMitigativeChainForConsequence(nodes, edges, consequence.id);
+    chainNodeIdsByConsequenceId[consequence.id] = chain;
     if (chain.length > maxDepth) {
       maxDepth = chain.length;
     }
     chain.forEach((nodeId, index) => {
       indexByNodeId[nodeId] = index;
+      consequenceIdByNodeId[nodeId] = consequence.id;
     });
   }
-  return { indexByNodeId, maxDepth };
+  return { indexByNodeId, consequenceIdByNodeId, chainNodeIdsByConsequenceId, maxDepth };
+}
+
+function computeSupportAnchorXById(nodes: Node<BowtieNodeData>[], edges: Edge[]) {
+  const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+  const outgoing = new Map<string, string[]>();
+
+  for (const edge of edges) {
+    const existing = outgoing.get(edge.source) ?? [];
+    existing.push(edge.target);
+    outgoing.set(edge.source, existing);
+  }
+
+  const cache = new Map<string, number | undefined>();
+
+  function resolveAnchor(nodeId: string, visited = new Set<string>()): number | undefined {
+    if (cache.has(nodeId)) {
+      return cache.get(nodeId);
+    }
+    if (visited.has(nodeId)) {
+      return undefined;
+    }
+
+    visited.add(nodeId);
+    const node = nodeMap.get(nodeId);
+    let anchorX: number | undefined;
+
+    if (node?.data.type === "preventive_barrier" || node?.data.type === "mitigative_barrier") {
+      anchorX = node.position.x;
+    } else {
+      for (const targetId of outgoing.get(nodeId) ?? []) {
+        const resolved = resolveAnchor(targetId, new Set(visited));
+        if (typeof resolved === "number") {
+          anchorX = resolved;
+          break;
+        }
+      }
+    }
+
+    if (typeof anchorX !== "number" && typeof node?.data.supportAnchorX === "number") {
+      anchorX = node.data.supportAnchorX;
+    }
+
+    cache.set(nodeId, anchorX);
+    return anchorX;
+  }
+
+  return nodes.reduce<Record<string, number>>((acc, node) => {
+    if (node.data.type !== "escalation_factor" && node.data.type !== "escalation_factor_control") {
+      return acc;
+    }
+    const anchorX = resolveAnchor(node.id);
+    if (typeof anchorX === "number") {
+      acc[node.id] = anchorX;
+    }
+    return acc;
+  }, {});
+}
+
+function computePackedBranchY(
+  branchNodes: Node<BowtieNodeData>[],
+  rowCountByNodeId: Record<string, number>,
+  barrierType: "preventive_barrier" | "mitigative_barrier",
+) {
+  const packedYByNodeId: Record<string, number> = {};
+  const ordered = [...branchNodes].sort(
+    (left, right) => left.position.y - right.position.y || left.position.x - right.position.x,
+  );
+
+  let nextMinY: number | null = null;
+  for (const node of ordered) {
+    const rows = Math.max(1, rowCountByNodeId[node.id] ?? 1);
+    const targetY: number = nextMinY === null ? node.position.y : Math.max(node.position.y, nextMinY);
+    packedYByNodeId[node.id] = targetY;
+
+    const branchBottom =
+      targetY +
+      Math.max(NODE_FOOTPRINTS[node.data.type].height, NODE_FOOTPRINTS[barrierType].height) +
+      (rows - 1) * BARRIER_ROW_GAP;
+    nextMinY = branchBottom + BRANCH_CLEARANCE;
+  }
+
+  return packedYByNodeId;
 }
 
 function quickAddOptionsFor(type: NodeType, side: "left" | "right"): QuickAddOption[] {
@@ -283,6 +666,7 @@ export function BowtieEditor({
   initialWorkflowState,
   readOnly = false,
 }: Props) {
+  const initialViewMode = readOnly ? "canvas" : shouldOpenInWorksheet(initialNodes) ? "worksheet" : "canvas";
   const [nodes, setNodes, rawOnNodesChange] = useNodesState(
     initialNodes.map((node) => ({
       ...node,
@@ -293,7 +677,7 @@ export function BowtieEditor({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [selectedEdgeIds, setSelectedEdgeIds] = useState<string[]>([]);
-  const [viewMode, setViewMode] = useState<"canvas" | "worksheet">("canvas");
+  const [viewMode, setViewMode] = useState<EditorViewMode>(initialViewMode);
   const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 });
   const [worksheetStepTitle, setWorksheetStepTitle] = useState("Select a worksheet step");
   const [worksheetGuidance, setWorksheetGuidance] = useState<StepGuidance | null>(
@@ -341,16 +725,105 @@ export function BowtieEditor({
     () => nodes.find((node) => node.data.type === "top_event")?.data.title ?? "",
     [nodes],
   );
-  const { indexByNodeId: mitigativeChainIndexByNodeId, maxDepth: mitigativeChainDepth } = useMemo(
+  const guidedCounts = useMemo(() => getGuidedCounts(nodes), [nodes]);
+  const guidedSteps = useMemo(() => getGuidedSteps(guidedCounts), [guidedCounts]);
+  const recommendedStep = useMemo(
+    () => guidedSteps.find((step) => !step.done) ?? null,
+    [guidedSteps],
+  );
+  const guidedCompletionCount = guidedSteps.filter((step) => step.done).length;
+  const showStarterGuide = !readOnly && guidedCompletionCount < guidedSteps.length;
+  const {
+    indexByNodeId: preventiveBarrierIndexByNodeId,
+    threatIdByNodeId: threatIdByPreventiveBarrierNodeId,
+    barrierIdsByThreatId,
+  } = useMemo(() => computePreventiveBarrierIndexById(nodes, edges), [nodes, edges]);
+  const {
+    indexByNodeId: mitigativeChainIndexByNodeId,
+    consequenceIdByNodeId: consequenceIdByMitigativeBarrierNodeId,
+    chainNodeIdsByConsequenceId,
+    maxDepth: mitigativeChainDepth,
+  } = useMemo(
     () => computeMitigativeChainIndexById(nodes, edges),
     [nodes, edges],
   );
-  const mitigativeColumns = Math.max(1, mitigativeChainDepth);
-  const laneWidths = useMemo(
-    () => [LANE_WIDTH, LANE_WIDTH, LANE_WIDTH, LANE_WIDTH * mitigativeColumns, LANE_WIDTH],
-    [mitigativeColumns],
+  const supportAnchorXByNodeId = useMemo(() => computeSupportAnchorXById(nodes, edges), [nodes, edges]);
+  const preventiveRowsByThreatId = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(barrierIdsByThreatId).map(([threatId, barrierIds]) => [
+          threatId,
+          Math.max(1, Math.ceil(barrierIds.length / BARRIER_COLUMNS)),
+        ]),
+      ) as Record<string, number>,
+    [barrierIdsByThreatId],
   );
+  const mitigativeRowsByConsequenceId = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(chainNodeIdsByConsequenceId).map(([consequenceId, chainNodeIds]) => [
+          consequenceId,
+          Math.max(1, Math.ceil(chainNodeIds.length / BARRIER_COLUMNS)),
+        ]),
+      ) as Record<string, number>,
+    [chainNodeIdsByConsequenceId],
+  );
+  const packedThreatYByNodeId = useMemo(
+    () =>
+      computePackedBranchY(
+        nodes.filter((node) => node.data.type === "threat"),
+        preventiveRowsByThreatId,
+        "preventive_barrier",
+      ),
+    [nodes, preventiveRowsByThreatId],
+  );
+  const packedConsequenceYByNodeId = useMemo(
+    () =>
+      computePackedBranchY(
+        nodes.filter((node) => node.data.type === "consequence"),
+        mitigativeRowsByConsequenceId,
+        "mitigative_barrier",
+      ),
+    [nodes, mitigativeRowsByConsequenceId],
+  );
+  const preventiveBarrierYByNodeId = useMemo(() => {
+    const next: Record<string, number> = {};
+    Object.entries(threatIdByPreventiveBarrierNodeId).forEach(([barrierId, threatId]) => {
+      const threatY = packedThreatYByNodeId[threatId];
+      if (typeof threatY !== "number") {
+        return;
+      }
+      next[barrierId] = threatY + barrierRowOffset(preventiveBarrierIndexByNodeId[barrierId] ?? 0);
+    });
+    return next;
+  }, [packedThreatYByNodeId, preventiveBarrierIndexByNodeId, threatIdByPreventiveBarrierNodeId]);
+  const mitigativeBarrierYByNodeId = useMemo(() => {
+    const next: Record<string, number> = {};
+    Object.entries(consequenceIdByMitigativeBarrierNodeId).forEach(([barrierId, consequenceId]) => {
+      const consequenceY = packedConsequenceYByNodeId[consequenceId];
+      if (typeof consequenceY !== "number") {
+        return;
+      }
+      next[barrierId] = consequenceY + barrierRowOffset(mitigativeChainIndexByNodeId[barrierId] ?? 0);
+    });
+    return next;
+  }, [consequenceIdByMitigativeBarrierNodeId, mitigativeChainIndexByNodeId, packedConsequenceYByNodeId]);
+  const mitigativeColumns = Math.max(1, mitigativeChainDepth);
+  const laneWidths = LANE_WIDTHS;
   const totalLaneWidth = useMemo(() => laneWidths.reduce((sum, width) => sum + width, 0), [laneWidths]);
+  const { laneTop, laneHeight } = useMemo(() => {
+    if (nodes.length === 0) {
+      return { laneTop: LANE_BASE_START_Y, laneHeight: LANE_BASE_HEIGHT };
+    }
+
+    const minY = Math.min(...nodes.map((node) => node.position.y)) - LANE_TOP_PADDING;
+    const maxBottom = Math.max(
+      ...nodes.map((node) => node.position.y + NODE_FOOTPRINTS[node.data.type].height),
+    ) + LANE_BOTTOM_PADDING;
+    const top = Math.min(LANE_BASE_START_Y, Math.floor(minY));
+    const bottom = Math.max(LANE_BASE_START_Y + LANE_BASE_HEIGHT, Math.ceil(maxBottom));
+    return { laneTop: top, laneHeight: bottom - top };
+  }, [nodes]);
   const viewportStorageKey = useMemo(() => `bowtie:viewport:${projectId}`, [projectId]);
   const onWorksheetTopEventChange = useCallback(
     (title: string) => {
@@ -425,6 +898,29 @@ export function BowtieEditor({
       return changed ? next : existing;
     });
   }, [mitigativeColumns, setNodes]);
+  useEffect(() => {
+    setNodes((existing) => {
+      let changed = false;
+      const next = existing.map((node) => {
+        if (node.data.type === "threat") {
+          const targetY = packedThreatYByNodeId[node.id];
+          if (typeof targetY === "number" && Math.abs(node.position.y - targetY) >= 0.5) {
+            changed = true;
+            return { ...node, position: { ...node.position, y: targetY } };
+          }
+        }
+        if (node.data.type === "consequence") {
+          const targetY = packedConsequenceYByNodeId[node.id];
+          if (typeof targetY === "number" && Math.abs(node.position.y - targetY) >= 0.5) {
+            changed = true;
+            return { ...node, position: { ...node.position, y: targetY } };
+          }
+        }
+        return node;
+      });
+      return changed ? next : existing;
+    });
+  }, [packedConsequenceYByNodeId, packedThreatYByNodeId, setNodes]);
   const initializeViewport = useCallback(
     (instance: ReactFlowInstance) => {
       let targetViewport = DEFAULT_VIEWPORT;
@@ -566,10 +1062,19 @@ export function BowtieEditor({
               currentNode.data.type,
               {
                 ...currentNode.data,
+                barrierIndex:
+                  currentNode.data.type === "preventive_barrier"
+                    ? preventiveBarrierIndexByNodeId[currentNode.id]
+                    : undefined,
                 chainIndex:
                   currentNode.data.type === "mitigative_barrier"
                     ? (mitigativeChainIndexByNodeId[currentNode.id] ?? currentNode.data.chainIndex)
                     : currentNode.data.chainIndex,
+                supportAnchorX:
+                  currentNode.data.type === "escalation_factor" ||
+                  currentNode.data.type === "escalation_factor_control"
+                    ? (supportAnchorXByNodeId[currentNode.id] ?? currentNode.data.supportAnchorX)
+                    : currentNode.data.supportAnchorX,
               },
               mitigativeColumns,
             ),
@@ -579,7 +1084,14 @@ export function BowtieEditor({
       });
       rawOnNodesChange(locked);
     },
-    [mitigativeChainIndexByNodeId, mitigativeColumns, nodes, rawOnNodesChange],
+    [
+      mitigativeChainIndexByNodeId,
+      mitigativeColumns,
+      nodes,
+      preventiveBarrierIndexByNodeId,
+      rawOnNodesChange,
+      supportAnchorXByNodeId,
+    ],
   );
 
   const onSelectionChange = useCallback((params: OnSelectionChangeParams) => {
@@ -594,6 +1106,10 @@ export function BowtieEditor({
     setNodes((existing) => {
       let changed = false;
       const next = existing.map((node) => {
+        const barrierIndex =
+          node.data.type === "preventive_barrier"
+            ? preventiveBarrierIndexByNodeId[node.id]
+            : undefined;
         const chainIndex =
           node.data.type === "mitigative_barrier"
             ? (mitigativeChainIndexByNodeId[node.id] ?? node.data.chainIndex)
@@ -602,24 +1118,47 @@ export function BowtieEditor({
           node.data.type === "escalation_factor" || node.data.type === "escalation_factor_control"
             ? supportLaneForNode(node, mitigativeColumns)
             : node.data.supportLane;
+        const supportAnchorX =
+          node.data.type === "escalation_factor" || node.data.type === "escalation_factor_control"
+            ? (supportAnchorXByNodeId[node.id] ?? node.data.supportAnchorX)
+            : node.data.supportAnchorX;
         const x = laneXForNode(
           node.data.type,
-          { ...node.data, chainIndex, supportLane },
+          { ...node.data, barrierIndex, chainIndex, supportLane, supportAnchorX },
           mitigativeColumns,
         );
-        if (Math.abs(node.position.x - x) < 0.5 && chainIndex === node.data.chainIndex) {
+        const y =
+          node.data.type === "preventive_barrier"
+            ? (preventiveBarrierYByNodeId[node.id] ?? node.position.y)
+            : node.data.type === "mitigative_barrier"
+              ? (mitigativeBarrierYByNodeId[node.id] ?? node.position.y)
+              : node.position.y;
+        if (
+          Math.abs(node.position.x - x) < 0.5 &&
+          Math.abs(node.position.y - y) < 0.5 &&
+          chainIndex === node.data.chainIndex &&
+          supportAnchorX === node.data.supportAnchorX
+        ) {
           return node;
         }
         changed = true;
         return {
           ...node,
-          position: { ...node.position, x },
-          data: { ...node.data, chainIndex, supportLane },
+          position: { ...node.position, x, y },
+          data: { ...node.data, chainIndex, supportLane, supportAnchorX },
         };
       });
       return changed ? next : existing;
     });
-  }, [mitigativeChainIndexByNodeId, mitigativeColumns, setNodes]);
+  }, [
+    mitigativeBarrierYByNodeId,
+    mitigativeChainIndexByNodeId,
+    mitigativeColumns,
+    preventiveBarrierIndexByNodeId,
+    preventiveBarrierYByNodeId,
+    setNodes,
+    supportAnchorXByNodeId,
+  ]);
 
   const deleteSelected = useCallback(() => {
     if (selectedNodeIds.length === 0 && selectedEdgeIds.length === 0) {
@@ -822,15 +1361,29 @@ export function BowtieEditor({
     }
     const meta = NODE_TYPE_META[type];
     const supportLane = supportLaneForNode(selectedNode, mitigativeColumns);
+    const supportAnchorX =
+      type === "escalation_factor" || type === "escalation_factor_control"
+        ? selectedNode?.position.x
+        : undefined;
+    const sameTypeNodes = nodes.filter((node) => node.data.type === type);
+    const nextBaseY =
+      type === "top_event"
+        ? 260
+        : sameTypeNodes.length > 0
+          ? Math.max(...sameTypeNodes.map((node) => node.position.y)) + BARRIER_ROW_GAP
+          : 140;
+    const basePosition = {
+      x: laneXForNode(type, { supportLane, supportAnchorX }, mitigativeColumns),
+      y: nextBaseY,
+    };
+    const position = findNonOverlappingPosition({ ...basePosition, type }, nodes);
+
     setNodes((existing) => [
       ...existing,
       {
         id: uuid(),
         type: "bowtieNode",
-        position: {
-          x: laneXForNode(type, { supportLane }, mitigativeColumns),
-          y: 100 + (existing.length % 8) * 70,
-        },
+        position,
         data: {
           type,
           typeLabel: meta.label,
@@ -840,6 +1393,7 @@ export function BowtieEditor({
             type === "escalation_factor" || type === "escalation_factor_control"
               ? supportLane
               : undefined,
+          supportAnchorX,
         },
       },
     ]);
@@ -858,6 +1412,16 @@ export function BowtieEditor({
 
   function inferTypeFromAction(action: string, selectedType: NodeType): NodeType {
     const normalized = action.toLowerCase();
+    if (normalized.includes("next logical")) {
+      if (selectedType === "top_event") return "threat";
+      if (selectedType === "threat") return "preventive_barrier";
+      if (selectedType === "preventive_barrier") return "escalation_factor";
+      if (selectedType === "consequence") return "mitigative_barrier";
+      if (selectedType === "mitigative_barrier") return "consequence";
+      if (selectedType === "escalation_factor") return "escalation_factor_control";
+      return "escalation_factor";
+    }
+    if (normalized.includes("escalation factor control")) return "escalation_factor_control";
     if (normalized.includes("threat")) return "threat";
     if (normalized.includes("consequence")) return "consequence";
     if (normalized.includes("preventive")) return "preventive_barrier";
@@ -869,70 +1433,35 @@ export function BowtieEditor({
     return "preventive_barrier";
   }
 
-  function onInsertSuggestions(
-    action: string,
-    items: { label: string; nodeType?: NodeType }[],
-  ) {
-    if (readOnly) return;
-    if (!selectedNode || items.length === 0) return;
-    const selectedType = selectedNode.data.type;
-    const fallbackType = inferTypeFromAction(action, selectedType);
-    const selectedSupportLane = supportLaneForNode(selectedNode, mitigativeColumns);
+  const findConnectedNode = useCallback((
+    nodeId: string,
+    direction: "incoming" | "outgoing",
+    type: NodeType,
+    graphNodes: Node<BowtieNodeData>[] = nodes,
+    graphEdges: Edge[] = edges,
+  ): Node<BowtieNodeData> | null => {
+    const matchingEdge =
+      direction === "incoming"
+        ? graphEdges.find(
+            (edge) => edge.target === nodeId && graphNodes.find((node) => node.id === edge.source)?.data.type === type,
+          )
+        : graphEdges.find(
+            (edge) => edge.source === nodeId && graphNodes.find((node) => node.id === edge.target)?.data.type === type,
+          );
 
-    const newNodes: Node<BowtieNodeData>[] = items.map((item, index) => {
-      const nodeType = item.nodeType ?? fallbackType;
-      const supportLane =
-        nodeType === "escalation_factor" || nodeType === "escalation_factor_control"
-          ? selectedSupportLane
-          : undefined;
-      const supportAnchorX =
-        nodeType === "escalation_factor" || nodeType === "escalation_factor_control"
-          ? selectedNode.position.x
-          : undefined;
-      return {
-      id: uuid(),
-      type: "bowtieNode",
-      position: {
-        x: laneXForNode(nodeType, { supportLane, supportAnchorX }, mitigativeColumns),
-        y: (selectedNode.position?.y ?? 220) + 80 + index * 95,
-      },
-      data: {
-        type: nodeType,
-        typeLabel: NODE_TYPE_META[nodeType].label,
-        title: item.label,
-        description: "",
-        supportLane,
-        supportAnchorX,
-        chainIndex:
-          nodeType === "mitigative_barrier"
-            ? (mitigativeChainIndexByNodeId[selectedNode.id] ?? selectedNode.data.chainIndex)
-            : undefined,
-      },
-      };
-    });
+    if (!matchingEdge) return null;
+    const connectedId = direction === "incoming" ? matchingEdge.source : matchingEdge.target;
+    return graphNodes.find((node) => node.id === connectedId) ?? null;
+  }, [edges, nodes]);
 
-    const newEdges: Edge[] = newNodes.map((node) =>
-      getEdgeForPair(selectedType, node.data.type, node.id, selectedNode.id),
-    );
-
-    setNodes((existing) => [...existing, ...newNodes]);
-    setEdges((existing) => [...existing, ...newEdges]);
-  }
-
-  const quickAddNode = useCallback((parentId: string, side: "left" | "right", childType: NodeType) => {
-    if (readOnly) return;
-    const parent = nodes.find((node) => node.id === parentId);
-    if (!parent) return;
-    if (parent.data.type === "threat" && side === "left") return;
-    if (parent.data.type === "consequence" && side === "right") return;
-
-    const siblingsSameType = nodes.filter(
-      (node) =>
-        node.data.type === childType &&
-        Math.abs(node.position.y - parent.position.y) < 240 &&
-        (side === "left" ? node.position.x < parent.position.x : node.position.x > parent.position.x),
-    ).length;
-
+  const buildSuggestedInsertion = useCallback((
+    parent: Node<BowtieNodeData>,
+    childType: NodeType,
+    title: string,
+    index: number,
+    graphNodes: Node<BowtieNodeData>[] = nodes,
+    graphEdges: Edge[] = edges,
+  ) => {
     const supportLane =
       childType === "escalation_factor" || childType === "escalation_factor_control"
         ? supportLaneForNode(parent, mitigativeColumns)
@@ -941,45 +1470,107 @@ export function BowtieEditor({
       childType === "escalation_factor" || childType === "escalation_factor_control"
         ? parent.position.x
         : undefined;
-
     let chainIndex: number | undefined =
       childType === "mitigative_barrier"
-        ? mitigativeChainIndexByNodeId[parent.id] ?? parent.data.chainIndex
+        ? (mitigativeChainIndexByNodeId[parent.id] ?? parent.data.chainIndex)
         : undefined;
 
     let x = laneXForNode(childType, { supportLane, supportAnchorX, chainIndex }, mitigativeColumns);
-    let y = parent.position.y + (siblingsSameType + 1) * 90;
-
+    let y = (parent.position?.y ?? 220) + 80 + index * 95;
     const childId = uuid();
     const nextEdges: Edge[] = [];
     const edgesToRemove = new Set<string>();
 
-    if (childType === "mitigative_barrier" && parent.data.type === "consequence" && side === "left") {
-      const topEvent = findNearestNodeByType(nodes, "top_event", parent.position.y);
-      const chain = getMitigativeChainForConsequence(nodes, edges, parent.id);
-      chainIndex = chain.length;
-      y = parent.position.y;
-      x = laneXForNode("mitigative_barrier", { chainIndex }, Math.max(mitigativeColumns, chain.length + 1));
-
-      const lastInChainId = chain.length > 0 ? chain[chain.length - 1] : topEvent?.id;
-      if (lastInChainId) {
-        edges
-          .filter((edge) => edge.source === lastInChainId && edge.target === parent.id)
-          .forEach((edge) => edgesToRemove.add(edge.id));
-        nextEdges.push({ id: uuid(), source: lastInChainId, target: childId, type: "smoothstep" });
-      }
-      nextEdges.push({ id: uuid(), source: childId, target: parent.id, type: "smoothstep" });
-    } else if (childType === "preventive_barrier" && parent.data.type === "threat" && side === "right") {
-      const topEvent = findNearestNodeByType(nodes, "top_event", parent.position.y);
-      nextEdges.push({ id: uuid(), source: parent.id, target: childId, type: "smoothstep" });
+    if (childType === "threat") {
+      const topEvent = findNearestNodeByType(graphNodes, "top_event", parent.position.y);
       if (topEvent) {
         nextEdges.push({ id: uuid(), source: childId, target: topEvent.id, type: "smoothstep" });
-        edges
-          .filter((edge) => edge.source === parent.id && edge.target === topEvent.id)
-          .forEach((edge) => edgesToRemove.add(edge.id));
       }
+      if (parent.data.type === "preventive_barrier") {
+        y = parent.position.y + index * 90;
+      }
+    } else if (childType === "consequence" && parent.data.type === "consequence") {
+      const topEvent = findNearestNodeByType(graphNodes, "top_event", parent.position.y);
+      if (topEvent) {
+        nextEdges.push({ id: uuid(), source: topEvent.id, target: childId, type: "smoothstep" });
+      }
+    } else if (childType === "preventive_barrier") {
+      const threatNode =
+        parent.data.type === "threat"
+          ? parent
+          : findConnectedNode(parent.id, "incoming", "threat", graphNodes, graphEdges) ??
+            findNearestNodeByType(graphNodes, "threat", parent.position.y);
+      const topEvent =
+        parent.data.type === "threat"
+          ? findNearestNodeByType(graphNodes, "top_event", parent.position.y)
+          : findConnectedNode(parent.id, "outgoing", "top_event", graphNodes, graphEdges) ??
+            findNearestNodeByType(graphNodes, "top_event", parent.position.y);
+
+      if (threatNode) {
+        const branchBarrierCount = graphEdges.filter(
+          (edge) =>
+            edge.source === threatNode.id &&
+            graphNodes.find((node) => node.id === edge.target)?.data.type === "preventive_barrier",
+        ).length;
+        x = laneXForNode("preventive_barrier", { barrierIndex: branchBarrierCount }, mitigativeColumns);
+        y = threatNode.position.y + barrierRowOffset(branchBarrierCount);
+        nextEdges.push({ id: uuid(), source: threatNode.id, target: childId, type: "smoothstep" });
+      }
+      if (topEvent) {
+        nextEdges.push({ id: uuid(), source: childId, target: topEvent.id, type: "smoothstep" });
+        if (parent.data.type === "threat") {
+          graphEdges
+            .filter((edge) => edge.source === parent.id && edge.target === topEvent.id)
+            .forEach((edge) => edgesToRemove.add(edge.id));
+        }
+      }
+    } else if (childType === "mitigative_barrier") {
+      const consequenceNode =
+        parent.data.type === "consequence"
+          ? parent
+          : findConnectedNode(parent.id, "outgoing", "consequence", graphNodes, graphEdges) ??
+            findNearestNodeByType(graphNodes, "consequence", parent.position.y);
+
+      if (parent.data.type === "consequence") {
+        const topEvent = findNearestNodeByType(graphNodes, "top_event", parent.position.y);
+        const chain = getMitigativeChainForConsequence(graphNodes, graphEdges, parent.id);
+        chainIndex = chain.length;
+        y = parent.position.y + barrierRowOffset(chainIndex);
+        x = laneXForNode("mitigative_barrier", { chainIndex }, mitigativeColumns);
+
+        const lastInChainId = chain.length > 0 ? chain[chain.length - 1] : topEvent?.id;
+        if (lastInChainId) {
+          graphEdges
+            .filter((edge) => edge.source === lastInChainId && edge.target === parent.id)
+            .forEach((edge) => edgesToRemove.add(edge.id));
+          nextEdges.push({ id: uuid(), source: lastInChainId, target: childId, type: "smoothstep" });
+        }
+        nextEdges.push({ id: uuid(), source: childId, target: parent.id, type: "smoothstep" });
+      } else {
+        const topEvent =
+          findConnectedNode(parent.id, "incoming", "top_event", graphNodes, graphEdges) ??
+          findNearestNodeByType(graphNodes, "top_event", parent.position.y);
+        if (topEvent) {
+          nextEdges.push({ id: uuid(), source: topEvent.id, target: childId, type: "smoothstep" });
+        }
+        if (consequenceNode) {
+          const chain = getMitigativeChainForConsequence(graphNodes, graphEdges, consequenceNode.id);
+          chainIndex = chain.length;
+          x = laneXForNode("mitigative_barrier", { chainIndex }, mitigativeColumns);
+          y = consequenceNode.position.y + barrierRowOffset(chainIndex);
+          nextEdges.push({ id: uuid(), source: childId, target: consequenceNode.id, type: "smoothstep" });
+        }
+      }
+    } else if (childType === "escalation_factor" || childType === "escalation_factor_control") {
+      nextEdges.push(getEdgeForPair(parent.data.type, childType, childId, parent.id));
     } else {
-      nextEdges.push(getEdgeForPair(parent.data.type, childType, childId, parentId));
+      nextEdges.push(getEdgeForPair(parent.data.type, childType, childId, parent.id));
+    }
+
+    if (childType !== "preventive_barrier" && childType !== "mitigative_barrier") {
+      const nextPosition = findNonOverlappingPosition({ x, y, type: childType }, graphNodes);
+      x = nextPosition.x;
+      y = nextPosition.y;
     }
 
     const newNode: Node<BowtieNodeData> = {
@@ -989,7 +1580,7 @@ export function BowtieEditor({
       data: {
         type: childType,
         typeLabel: NODE_TYPE_META[childType].label,
-        title: NODE_TYPE_META[childType].label,
+        title,
         description: "",
         supportLane,
         supportAnchorX,
@@ -997,12 +1588,78 @@ export function BowtieEditor({
       },
     };
 
-    setNodes((existing) => [...existing, newNode]);
-    setEdges((existing) => {
-      const kept = edgesToRemove.size > 0 ? existing.filter((edge) => !edgesToRemove.has(edge.id)) : existing;
-      return [...kept, ...nextEdges];
+    return { newNode, nextEdges, edgesToRemove };
+  }, [edges, findConnectedNode, mitigativeChainIndexByNodeId, mitigativeColumns, nodes]);
+
+  function onInsertSuggestions(
+    action: string,
+    items: { label: string; nodeType?: NodeType }[],
+  ) {
+    if (readOnly) return;
+    if (!selectedNode || items.length === 0) return;
+    const selectedType = selectedNode.data.type;
+    const fallbackType = inferTypeFromAction(action, selectedType);
+    const existingNodeKeys = new Set(
+      nodes.map((node) => `${node.data.type}:${node.data.title.trim().toLowerCase().replace(/\s+/g, " ")}`),
+    );
+
+    const filteredItems = items.filter((item) => {
+      const nodeType = item.nodeType ?? fallbackType;
+      const normalizedTitle = item.label.trim().toLowerCase().replace(/\s+/g, " ");
+      if (!normalizedTitle) return false;
+      const key = `${nodeType}:${normalizedTitle}`;
+      if (existingNodeKeys.has(key)) {
+        return false;
+      }
+      existingNodeKeys.add(key);
+      return true;
     });
-  }, [edges, mitigativeChainIndexByNodeId, mitigativeColumns, nodes, readOnly, setEdges, setNodes]);
+
+    if (filteredItems.length === 0) {
+      return;
+    }
+
+    let draftNodes = [...nodes];
+    let draftEdges = [...edges];
+    filteredItems.forEach((item, index) => {
+      const nodeType = item.nodeType ?? fallbackType;
+      const insertion = buildSuggestedInsertion(selectedNode, nodeType, item.label, index, draftNodes, draftEdges);
+      draftNodes = [...draftNodes, insertion.newNode];
+      const keptEdges =
+        insertion.edgesToRemove.size > 0
+          ? draftEdges.filter((edge) => !insertion.edgesToRemove.has(edge.id))
+          : draftEdges;
+      draftEdges = [...keptEdges, ...insertion.nextEdges];
+    });
+
+    setNodes(draftNodes);
+    setEdges(draftEdges);
+  }
+
+  const quickAddNode = useCallback((parentId: string, side: "left" | "right", childType: NodeType) => {
+    if (readOnly) return;
+    const parent = nodes.find((node) => node.id === parentId);
+    if (!parent) return;
+    if (parent.data.type === "threat" && side === "left") return;
+    if (parent.data.type === "consequence" && side === "right") return;
+    const insertion = buildSuggestedInsertion(
+      parent,
+      childType,
+      NODE_TYPE_META[childType].label,
+      0,
+      nodes,
+      edges,
+    );
+
+    setNodes((existing) => [...existing, insertion.newNode]);
+    setEdges((existing) => {
+      const kept =
+        insertion.edgesToRemove.size > 0
+          ? existing.filter((edge) => !insertion.edgesToRemove.has(edge.id))
+          : existing;
+      return [...kept, ...insertion.nextEdges];
+    });
+  }, [buildSuggestedInsertion, edges, nodes, readOnly, setEdges, setNodes]);
 
   const toggleCollapse = useCallback((nodeId: string, side: "left" | "right") => {
     if (readOnly) return;
@@ -1288,12 +1945,14 @@ export function BowtieEditor({
               <p className="text-xs font-semibold uppercase tracking-wider text-[#325D88]">Example canvas</p>
               <h3 className="mt-1 text-sm font-semibold text-[#1F2933]">{projectMeta.title}</h3>
               <p className="mt-2 text-xs text-[#1F2933]/75">
-                Public demo for an AI data breach scenario. Pan and zoom the canvas to inspect how threats,
-                barriers, escalation factors, and consequences connect.
+                {projectMeta.industry} scenario with a complete bowtie layout. Pan and zoom the canvas to inspect
+                how threats, barriers, escalation factors, and consequences connect.
               </p>
             </div>
             <div className="rounded border border-[#9CA3AF] bg-white p-3 text-xs text-[#1F2933]/80">
-              <p>
+              <p className="font-semibold text-[#1F2933]">Top event</p>
+              <p className="mt-1">{projectMeta.topEvent}</p>
+              <p className="mt-3">
                 Nodes: <strong>{nodes.length}</strong>
               </p>
               <p className="mt-1">
@@ -1310,14 +1969,80 @@ export function BowtieEditor({
               Create Your Own
             </Link>
             <Link
-              href="/"
+              href="/examples"
               className="block rounded border border-[#9CA3AF] bg-white px-3 py-2 text-center text-xs font-semibold text-[#1F2933]"
             >
-              Back to Home
+              All Examples
             </Link>
           </div>
         ) : (
           <>
+            {showStarterGuide ? (
+              <div className="mb-3 rounded border border-[#9CA3AF] bg-white p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-[#325D88]">Starter Guide</p>
+                    <p className="mt-1 text-xs text-[#1F2933]/70">
+                      Follow the recommended order until the core bowtie structure is in place.
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-[#9CA3AF] px-2 py-1 text-[11px] font-semibold text-[#1F2933]/75">
+                    {guidedCompletionCount}/{guidedSteps.length}
+                  </span>
+                </div>
+
+                {recommendedStep ? (
+                  <div className="mt-3 rounded border border-[#D4A547]/60 bg-[#f8f1df] p-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-[#7a5b10]">
+                      Recommended Next Action
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-[#1F2933]">{recommendedStep.title}</p>
+                    <p className="mt-1 text-xs text-[#1F2933]/75">{recommendedStep.detail}</p>
+                    {viewMode !== recommendedStep.preferredView ? (
+                      <button
+                        onClick={() => setViewMode(recommendedStep.preferredView)}
+                        className="mt-3 w-full rounded bg-[#325D88] px-3 py-2 text-xs font-semibold text-white"
+                      >
+                        {recommendedStep.preferredView === "worksheet" ? "Open Guided Worksheet" : "Open Canvas"}
+                      </button>
+                    ) : (
+                      <p className="mt-3 text-[11px] font-semibold uppercase tracking-wider text-[#325D88]">
+                        You are in the right workspace for this step.
+                      </p>
+                    )}
+                  </div>
+                ) : null}
+
+                <div className="mt-3 space-y-2">
+                  {guidedSteps.map((step) => (
+                    <div key={step.id} className="rounded border border-[#9CA3AF]/70 bg-[#F5F3F0] p-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs font-semibold text-[#1F2933]">{step.title}</p>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
+                            step.done
+                              ? "bg-[#d8eadf] text-[#235f34]"
+                              : "bg-[#e2e8f0] text-[#475569]"
+                          }`}
+                        >
+                          {step.done ? "Done" : "Next"}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[11px] text-[#1F2933]/70">{step.detail}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="mb-3 rounded border border-[#9CA3AF] bg-white p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-[#325D88]">Core Structure Ready</p>
+                <p className="mt-1 text-xs text-[#1F2933]/75">
+                  Your bowtie has the main structure in place. Use the worksheet to add notes and ownership details,
+                  or stay on the canvas to refine barriers and export.
+                </p>
+              </div>
+            )}
+
             <div className="mb-3 grid grid-cols-2 gap-1 rounded border border-[#9CA3AF] bg-white p-1">
               <button
                 onClick={() => setViewMode("canvas")}
@@ -1449,9 +2174,9 @@ export function BowtieEditor({
                 className="absolute"
                 style={{
                   left: LANE_START_X,
-                  top: LANE_START_Y,
+                  top: laneTop,
                   width: totalLaneWidth,
-                  height: LANE_HEIGHT,
+                  height: laneHeight,
                   transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`,
                   transformOrigin: "top left",
                 }}
@@ -1465,7 +2190,10 @@ export function BowtieEditor({
                     />
                   ))}
                 </div>
-                <div className="absolute left-0 top-0 flex h-12 w-full border-b border-zinc-300/70 bg-white/90">
+                <div
+                  className="absolute left-0 top-0 flex w-full border-b border-zinc-300/70 bg-white/90"
+                  style={{ height: LANE_LABEL_HEIGHT }}
+                >
                   {LANE_META.map((lane, index) => (
                     <div
                       key={`${lane.label}-label`}
