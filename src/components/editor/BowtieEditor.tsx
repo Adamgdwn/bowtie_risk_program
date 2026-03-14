@@ -2248,80 +2248,6 @@ export function BowtieEditor({
           </div>
         ) : (
           <>
-            {showStarterGuide ? (
-              <div className="mb-3 rounded border border-[#9CA3AF] bg-white p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-[#325D88]">Starter Guide</p>
-                    <p className="mt-1 text-xs text-[#1F2933]/70">
-                      Follow the recommended order until the core bowtie structure is in place.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-full border border-[#9CA3AF] px-2 py-1 text-[11px] font-semibold text-[#1F2933]/75">
-                      {guidedCompletionCount}/{guidedSteps.length}
-                    </span>
-                    <button
-                      onClick={() => setStarterGuideDismissed(true)}
-                      className="rounded border border-[#9CA3AF] px-2 py-1 text-[11px] font-semibold text-[#1F2933]/70"
-                    >
-                      Hide
-                    </button>
-                  </div>
-                </div>
-
-                {recommendedStep ? (
-                  <div className="mt-3 rounded border border-[#D4A547]/60 bg-[#f8f1df] p-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-[#7a5b10]">
-                      Recommended Next Action
-                    </p>
-                    <p className="mt-1 text-sm font-semibold text-[#1F2933]">{recommendedStep.title}</p>
-                    <p className="mt-1 text-xs text-[#1F2933]/75">{recommendedStep.detail}</p>
-                    {viewMode !== recommendedStep.preferredView ? (
-                      <button
-                        onClick={() => setViewMode(recommendedStep.preferredView)}
-                        className="mt-3 w-full rounded bg-[#325D88] px-3 py-2 text-xs font-semibold text-white"
-                      >
-                        {recommendedStep.preferredView === "worksheet" ? "Open Guided Worksheet" : "Open Canvas"}
-                      </button>
-                    ) : (
-                      <p className="mt-3 text-[11px] font-semibold uppercase tracking-wider text-[#325D88]">
-                        You are in the right workspace for this step.
-                      </p>
-                    )}
-                  </div>
-                ) : null}
-
-                <div className="mt-3 space-y-2">
-                  {guidedSteps.map((step) => (
-                    <div key={step.id} className="rounded border border-[#9CA3AF]/70 bg-[#F5F3F0] p-2">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-xs font-semibold text-[#1F2933]">{step.title}</p>
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
-                            step.done
-                              ? "bg-[#d8eadf] text-[#235f34]"
-                              : "bg-[#e2e8f0] text-[#475569]"
-                          }`}
-                        >
-                          {step.done ? "Done" : "Next"}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-[11px] text-[#1F2933]/70">{step.detail}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="mb-3 rounded border border-[#9CA3AF] bg-white p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-[#325D88]">Core Structure Ready</p>
-                <p className="mt-1 text-xs text-[#1F2933]/75">
-                  Your bowtie has the main structure in place. Use the worksheet to add notes and ownership details,
-                  or stay on the canvas to refine barriers and export.
-                </p>
-              </div>
-            )}
-
             <div className="mb-3 grid grid-cols-2 gap-1 rounded border border-[#9CA3AF] bg-white p-1">
               <button
                 onClick={() => setViewMode("canvas")}
@@ -2497,97 +2423,186 @@ export function BowtieEditor({
         )}
       </div>
 
-      <div className="relative flex-1" ref={canvasRef}>
-        {readOnly || viewMode === "canvas" ? (
-          <>
-            <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
-              <div
-                className="absolute"
-                style={{
-                  left: LANE_START_X,
-                  top: laneTop,
-                  width: totalLaneWidth,
-                  height: laneHeight,
-                  transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`,
-                  transformOrigin: "top left",
-                }}
-              >
-                <div className="absolute inset-0 flex">
-                  {LANE_META.map((lane, index) => (
-                    <div
-                      key={lane.label}
-                      className={`h-full ${lane.className}`}
-                      style={{ width: laneWidths[index] }}
-                    />
-                  ))}
+      <div className="flex min-w-0 flex-1 flex-col">
+        {!readOnly ? (
+          showStarterGuide ? (
+            <div className="border-b border-[#9CA3AF] bg-white px-4 py-3">
+              <div className="flex flex-wrap items-start gap-3">
+                <div className="min-w-[180px] flex-1">
+                  <div className="flex items-center gap-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-[#325D88]">Starter Guide</p>
+                    <span className="rounded-full border border-[#9CA3AF] px-2 py-1 text-[11px] font-semibold text-[#1F2933]/75">
+                      {guidedCompletionCount}/{guidedSteps.length}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-[#1F2933]/70">
+                    Follow the recommended order until the core bowtie structure is in place.
+                  </p>
                 </div>
-                <div
-                  className="absolute left-0 top-0 flex w-full border-b border-zinc-300/70 bg-white/90"
-                  style={{ height: LANE_LABEL_HEIGHT }}
-                >
-                  {LANE_META.map((lane, index) => (
-                    <div
-                      key={`${lane.label}-label`}
-                      className="flex items-center justify-center px-2 text-center text-[11px] font-semibold uppercase tracking-wider text-[#1F2933]"
-                      style={{ width: laneWidths[index] }}
-                    >
-                      {index === 0
-                        ? `${lane.label} (${laneNodeCounts.threats})`
-                        : index === 1
-                          ? `${lane.label} (${laneNodeCounts.preventiveBarriers})`
-                          : index === 2
-                            ? `${lane.label} (${laneNodeCounts.topEvent})`
-                            : index === 3
-                              ? `${lane.label} (${laneNodeCounts.mitigativeBarriers})`
-                              : `${lane.label} (${laneNodeCounts.consequences})`}
+                {recommendedStep ? (
+                  <div className="min-w-[280px] flex-[1.4] rounded border border-[#D4A547]/60 bg-[#f8f1df] px-3 py-2">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-[200px] flex-1">
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-[#7a5b10]">
+                          Recommended Next Action
+                        </p>
+                        <p className="mt-1 text-sm font-semibold text-[#1F2933]">{recommendedStep.title}</p>
+                        <p className="mt-1 text-xs text-[#1F2933]/75">{recommendedStep.detail}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {viewMode !== recommendedStep.preferredView ? (
+                          <button
+                            onClick={() => setViewMode(recommendedStep.preferredView)}
+                            className="rounded bg-[#325D88] px-3 py-2 text-xs font-semibold text-white"
+                          >
+                            {recommendedStep.preferredView === "worksheet" ? "Open Guided Worksheet" : "Open Canvas"}
+                          </button>
+                        ) : (
+                          <span className="rounded bg-[#e8eef7] px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-[#325D88]">
+                            Right Workspace
+                          </span>
+                        )}
+                        <button
+                          onClick={() => setStarterGuideDismissed(true)}
+                          className="rounded border border-[#9CA3AF] px-3 py-2 text-xs font-semibold text-[#1F2933]/70"
+                        >
+                          Hide
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+                <div className="flex min-w-[260px] flex-[1.2] flex-wrap gap-2">
+                  {guidedSteps.map((step) => (
+                    <div key={step.id} className="min-w-[180px] flex-1 rounded border border-[#9CA3AF]/70 bg-[#F5F3F0] px-3 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold text-[#1F2933]">{step.title}</p>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
+                            step.done ? "bg-[#d8eadf] text-[#235f34]" : "bg-[#e2e8f0] text-[#475569]"
+                          }`}
+                        >
+                          {step.done ? "Done" : "Next"}
+                        </span>
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
             </div>
-            <ReactFlow
-              className="relative z-10"
-              nodes={viewNodes}
-              edges={viewEdges}
-              nodeTypes={nodeTypes}
-              onNodesChange={readOnly ? undefined : onNodesChangeLocked}
-              onEdgesChange={readOnly ? undefined : onEdgesChange}
-              onConnect={readOnly ? undefined : onConnect}
-              onSelectionChange={readOnly ? undefined : onSelectionChange}
-              onNodeClick={readOnly ? undefined : (_, node) => setSelectedId(node.id)}
-              onPaneClick={readOnly ? undefined : () => setSelectedId(null)}
-              onMove={(_, nextViewport) => setViewport(nextViewport)}
-              onInit={(instance: ReactFlowInstance) => initializeViewport(instance)}
-              snapToGrid
-              snapGrid={[12, 12]}
-              nodesDraggable={!readOnly}
-              nodesConnectable={!readOnly}
-              elementsSelectable={!readOnly}
-              panOnDrag
-              deleteKeyCode={null}
-            >
-              <Background gap={12} size={1} />
-              <MiniMap />
-              <Controls />
-            </ReactFlow>
-          </>
-        ) : (
-          <WorkflowWorksheet
-            projectId={projectId}
-            projectMeta={projectMeta}
-            nodes={nodes}
-            edges={edges}
-            initialState={initialWorkflowState}
-            currentTopEvent={worksheetTopEvent}
-            onTopEventChange={onWorksheetTopEventChange}
-            onGuidanceContextChange={(payload) => {
-              setWorksheetStepTitle(payload.stepTitle || "Select a worksheet step");
-              setWorksheetGuidance(payload.guidance);
-              setWorksheetGuidanceLoading(payload.loading);
-              setWorksheetGuidanceError(payload.error);
-            }}
-          />
-        )}
+          ) : (
+            <div className="border-b border-[#9CA3AF] bg-white px-4 py-2">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-[#325D88]">Core Structure Ready</p>
+                  <p className="mt-1 text-xs text-[#1F2933]/75">
+                    Your bowtie has the main structure in place. Use the worksheet to add notes and ownership details,
+                    or stay on the canvas to refine barriers and export.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setStarterGuideDismissed(false)}
+                  className="rounded border border-[#9CA3AF] px-3 py-2 text-xs font-semibold text-[#1F2933]/70"
+                >
+                  Show Guide
+                </button>
+              </div>
+            </div>
+          )
+        ) : null}
+
+        <div className="relative min-h-0 flex-1" ref={canvasRef}>
+          {readOnly || viewMode === "canvas" ? (
+            <>
+              <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+                <div
+                  className="absolute"
+                  style={{
+                    left: LANE_START_X,
+                    top: laneTop,
+                    width: totalLaneWidth,
+                    height: laneHeight,
+                    transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`,
+                    transformOrigin: "top left",
+                  }}
+                >
+                  <div className="absolute inset-0 flex">
+                    {LANE_META.map((lane, index) => (
+                      <div
+                        key={lane.label}
+                        className={`h-full ${lane.className}`}
+                        style={{ width: laneWidths[index] }}
+                      />
+                    ))}
+                  </div>
+                  <div
+                    className="absolute left-0 top-0 flex w-full border-b border-zinc-300/70 bg-white/90"
+                    style={{ height: LANE_LABEL_HEIGHT }}
+                  >
+                    {LANE_META.map((lane, index) => (
+                      <div
+                        key={`${lane.label}-label`}
+                        className="flex items-center justify-center px-2 text-center text-[11px] font-semibold uppercase tracking-wider text-[#1F2933]"
+                        style={{ width: laneWidths[index] }}
+                      >
+                        {index === 0
+                          ? `${lane.label} (${laneNodeCounts.threats})`
+                          : index === 1
+                            ? `${lane.label} (${laneNodeCounts.preventiveBarriers})`
+                            : index === 2
+                              ? `${lane.label} (${laneNodeCounts.topEvent})`
+                              : index === 3
+                                ? `${lane.label} (${laneNodeCounts.mitigativeBarriers})`
+                                : `${lane.label} (${laneNodeCounts.consequences})`}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <ReactFlow
+                className="relative z-10"
+                nodes={viewNodes}
+                edges={viewEdges}
+                nodeTypes={nodeTypes}
+                onNodesChange={readOnly ? undefined : onNodesChangeLocked}
+                onEdgesChange={readOnly ? undefined : onEdgesChange}
+                onConnect={readOnly ? undefined : onConnect}
+                onSelectionChange={readOnly ? undefined : onSelectionChange}
+                onNodeClick={readOnly ? undefined : (_, node) => setSelectedId(node.id)}
+                onPaneClick={readOnly ? undefined : () => setSelectedId(null)}
+                onMove={(_, nextViewport) => setViewport(nextViewport)}
+                onInit={(instance: ReactFlowInstance) => initializeViewport(instance)}
+                snapToGrid
+                snapGrid={[12, 12]}
+                nodesDraggable={!readOnly}
+                nodesConnectable={!readOnly}
+                elementsSelectable={!readOnly}
+                panOnDrag
+                deleteKeyCode={null}
+              >
+                <Background gap={12} size={1} />
+                <MiniMap />
+                <Controls />
+              </ReactFlow>
+            </>
+          ) : (
+            <WorkflowWorksheet
+              projectId={projectId}
+              projectMeta={projectMeta}
+              nodes={nodes}
+              edges={edges}
+              initialState={initialWorkflowState}
+              currentTopEvent={worksheetTopEvent}
+              onTopEventChange={onWorksheetTopEventChange}
+              onGuidanceContextChange={(payload) => {
+                setWorksheetStepTitle(payload.stepTitle || "Select a worksheet step");
+                setWorksheetGuidance(payload.guidance);
+                setWorksheetGuidanceLoading(payload.loading);
+                setWorksheetGuidanceError(payload.error);
+              }}
+            />
+          )}
+        </div>
       </div>
 
       {toasts.length > 0 ? (
