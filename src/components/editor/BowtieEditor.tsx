@@ -2211,72 +2211,73 @@ export function BowtieEditor({
     <div className="relative flex h-[calc(100vh-4rem)] w-full flex-col">
       {!readOnly ? (
         showStarterGuide ? (
-          <div className="border-b border-[#9CA3AF] bg-white px-4 py-3">
-            <div className="grid gap-3 xl:grid-cols-[minmax(240px,0.85fr)_minmax(420px,1.2fr)_minmax(520px,1.3fr)]">
-              <div className="rounded border border-[#9CA3AF]/70 bg-[#F7F8FA] px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#325D88]">Starter Guide</p>
-                  <span className="rounded-full border border-[#9CA3AF] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#1F2933]/75">
-                    {guidedCompletionCount}/{guidedSteps.length}
-                  </span>
+          <div className="border-b border-[#9CA3AF] bg-white px-4 py-2.5">
+            <div className="space-y-2">
+              <div className="grid gap-2 xl:grid-cols-[260px_minmax(0,1fr)_auto]">
+                <div className="rounded border border-[#9CA3AF]/70 bg-[#F7F8FA] px-4 py-2.5">
+                  <div className="flex items-center gap-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#325D88]">Starter Guide</p>
+                    <span className="rounded-full border border-[#9CA3AF] bg-white px-2.5 py-0.5 text-[11px] font-semibold text-[#1F2933]/75">
+                      {guidedCompletionCount}/{guidedSteps.length}
+                    </span>
+                  </div>
+                  <p className="mt-1.5 text-sm font-medium leading-5 text-[#1F2933]">
+                    Build the core bowtie in a clean sequence.
+                  </p>
                 </div>
-                <p className="mt-2 text-sm font-medium text-[#1F2933]">Build the core bowtie in a clean, recommended sequence.</p>
-                <p className="mt-1 text-xs leading-5 text-[#1F2933]/70">
-                  Complete the essentials first, then move into richer ownership, notes, and export detail.
-                </p>
-              </div>
-              {recommendedStep ? (
-                <div className="rounded border border-[#D4A547]/60 bg-[#f8f1df] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]">
-                  <div className="flex h-full flex-col justify-between gap-3">
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#7a5b10]">
-                        Recommended Next Action
-                      </p>
-                      <p className="mt-2 text-[1.05rem] font-semibold leading-6 text-[#1F2933]">{recommendedStep.title}</p>
-                      <p className="mt-2 max-w-2xl text-sm leading-6 text-[#1F2933]/75">{recommendedStep.detail}</p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      {viewMode !== recommendedStep.preferredView ? (
+                {recommendedStep ? (
+                  <div className="rounded border border-[#D4A547]/60 bg-[#f8f1df] px-4 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]">
+                    <div className="flex h-full items-center justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#7a5b10]">
+                          Recommended Next Action
+                        </p>
+                        <p className="mt-1 text-base font-semibold leading-6 text-[#1F2933]">{recommendedStep.title}</p>
+                        <p className="mt-0.5 text-sm leading-5 text-[#1F2933]/75">{recommendedStep.detail}</p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        {viewMode !== recommendedStep.preferredView ? (
+                          <button
+                            onClick={() => setViewMode(recommendedStep.preferredView)}
+                            className="rounded bg-[#325D88] px-3 py-2 text-xs font-semibold uppercase tracking-wider text-white"
+                          >
+                            {recommendedStep.preferredView === "worksheet" ? "Open Worksheet" : "Open Canvas"}
+                          </button>
+                        ) : (
+                          <span className="rounded bg-[#e8eef7] px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#325D88]">
+                            Right Workspace
+                          </span>
+                        )}
                         <button
-                          onClick={() => setViewMode(recommendedStep.preferredView)}
-                          className="rounded bg-[#325D88] px-3 py-2 text-xs font-semibold uppercase tracking-wider text-white"
+                          onClick={() => setStarterGuideDismissed(true)}
+                          className="rounded border border-[#9CA3AF] bg-white px-3 py-2 text-xs font-semibold uppercase tracking-wider text-[#1F2933]/70"
                         >
-                          {recommendedStep.preferredView === "worksheet" ? "Open Guided Worksheet" : "Open Canvas"}
+                          Hide
                         </button>
-                      ) : (
-                        <span className="rounded bg-[#e8eef7] px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#325D88]">
-                          Right Workspace
-                        </span>
-                      )}
-                      <button
-                        onClick={() => setStarterGuideDismissed(true)}
-                        className="rounded border border-[#9CA3AF] bg-white px-3 py-2 text-xs font-semibold uppercase tracking-wider text-[#1F2933]/70"
-                      >
-                        Hide
-                      </button>
+                      </div>
                     </div>
                   </div>
+                ) : (
+                  <div className="rounded border border-[#9CA3AF]/70 bg-[#F7F8FA] px-4 py-2.5" />
+                )}
+                <div className="hidden xl:flex xl:items-center xl:justify-end">
+                  <p className="max-w-[220px] text-right text-[11px] leading-5 text-[#1F2933]/60">
+                    Complete the essentials first, then deepen ownership, notes, and export detail.
+                  </p>
                 </div>
-              ) : (
-                <div className="rounded border border-[#9CA3AF]/70 bg-[#F7F8FA] px-4 py-3" />
-              )}
-              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-2">
+              </div>
+              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
                 {guidedSteps.map((step, index) => (
-                  <div
-                    key={step.id}
-                    className={`rounded border border-[#9CA3AF]/70 bg-[#F5F3F0] px-3 py-3 ${
-                      guidedSteps.length % 2 === 1 && index === guidedSteps.length - 1 ? "sm:col-span-2" : ""
-                    }`}
-                  >
-                    <div className="flex h-full items-start justify-between gap-3">
-                      <div>
+                  <div key={step.id} className="rounded border border-[#9CA3AF]/70 bg-[#F5F3F0] px-3 py-2.5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
                         <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#1F2933]/45">
                           Step {index + 1}
                         </p>
                         <p className="mt-1 text-sm font-semibold leading-5 text-[#1F2933]">{step.title}</p>
                       </div>
                       <span
-                        className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] ${
                           step.done ? "bg-[#d8eadf] text-[#235f34]" : "bg-[#e2e8f0] text-[#475569]"
                         }`}
                       >
