@@ -113,7 +113,7 @@ export default function Home() {
                 >
                   Sign Up
                 </Link>
-                <Link href="/login" className="brand-btn-secondary rounded-xl px-5 py-3 text-sm font-semibold">
+                <Link href="/examples/ai-data-breach" className="brand-btn-secondary rounded-xl px-5 py-3 text-sm font-semibold">
                   View Example Bowtie
                 </Link>
               </div>

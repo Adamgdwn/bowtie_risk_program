@@ -159,3 +159,27 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
   return NextResponse.json({ ok: true });
 }
+
+export async function DELETE(_: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
+  const { user, supabase } = await requireUser();
+
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id")
+    .eq("id", id)
+    .eq("owner_id", user.id)
+    .single();
+
+  if (!project) {
+    return NextResponse.json({ error: "Project not found." }, { status: 404 });
+  }
+
+  const { error } = await supabase.from("projects").delete().eq("id", id).eq("owner_id", user.id);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
+}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import ReactFlow, {
   Background,
   Controls,
@@ -56,6 +57,7 @@ interface Props {
   initialNodes: Node<BowtieNodeData>[];
   initialEdges: Edge[];
   initialWorkflowState?: WorkflowState | null;
+  readOnly?: boolean;
 }
 
 const nodeTypes = { bowtieNode: BowtieNode };
@@ -279,6 +281,7 @@ export function BowtieEditor({
   initialNodes,
   initialEdges,
   initialWorkflowState,
+  readOnly = false,
 }: Props) {
   const [nodes, setNodes, rawOnNodesChange] = useNodesState(
     initialNodes.map((node) => ({
@@ -455,6 +458,9 @@ export function BowtieEditor({
   );
 
   const saveCanvas = useCallback(async () => {
+    if (readOnly) {
+      return;
+    }
     setSaving(true);
     const nodesForSave = nodes.map((node) => ({
       ...node,
@@ -469,15 +475,18 @@ export function BowtieEditor({
       window.localStorage.setItem(viewportStorageKey, JSON.stringify(viewport));
     }
     setSaving(false);
-  }, [projectId, nodes, edges, viewportStorageKey, viewport]);
+  }, [edges, nodes, projectId, readOnly, viewport, viewportStorageKey]);
 
   useEffect(() => {
+    if (readOnly) {
+      return;
+    }
     window.clearTimeout(autosaveRef.current);
     autosaveRef.current = window.setTimeout(() => {
       void saveCanvas();
     }, 1200);
     return () => window.clearTimeout(autosaveRef.current);
-  }, [nodes, edges, saveCanvas]);
+  }, [edges, nodes, readOnly, saveCanvas]);
 
   useEffect(() => {
     const hash = JSON.stringify({ nodes, edges });
@@ -748,6 +757,9 @@ export function BowtieEditor({
   }, [copySelection, deleteSelected]);
 
   useEffect(() => {
+    if (readOnly) {
+      return;
+    }
     function onKeyDown(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
       const tag = target?.tagName?.toLowerCase();
@@ -802,9 +814,12 @@ export function BowtieEditor({
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [copySelection, cutSelection, pasteSelection, undo, redo, deleteSelected]);
+  }, [copySelection, cutSelection, deleteSelected, pasteSelection, readOnly, redo, undo]);
 
   function addNode(type: NodeType) {
+    if (readOnly) {
+      return;
+    }
     const meta = NODE_TYPE_META[type];
     const supportLane = supportLaneForNode(selectedNode, mitigativeColumns);
     setNodes((existing) => [
@@ -831,6 +846,9 @@ export function BowtieEditor({
   }
 
   function onUpdateNode(nodeId: string, patch: Partial<BowtieNodeData>) {
+    if (readOnly) {
+      return;
+    }
     setNodes((existing) =>
       existing.map((node) =>
         node.id === nodeId ? { ...node, data: { ...node.data, ...patch } } : node,
@@ -855,6 +873,7 @@ export function BowtieEditor({
     action: string,
     items: { label: string; nodeType?: NodeType }[],
   ) {
+    if (readOnly) return;
     if (!selectedNode || items.length === 0) return;
     const selectedType = selectedNode.data.type;
     const fallbackType = inferTypeFromAction(action, selectedType);
@@ -901,6 +920,7 @@ export function BowtieEditor({
   }
 
   const quickAddNode = useCallback((parentId: string, side: "left" | "right", childType: NodeType) => {
+    if (readOnly) return;
     const parent = nodes.find((node) => node.id === parentId);
     if (!parent) return;
     if (parent.data.type === "threat" && side === "left") return;
@@ -982,9 +1002,10 @@ export function BowtieEditor({
       const kept = edgesToRemove.size > 0 ? existing.filter((edge) => !edgesToRemove.has(edge.id)) : existing;
       return [...kept, ...nextEdges];
     });
-  }, [edges, mitigativeChainIndexByNodeId, mitigativeColumns, nodes, setEdges, setNodes]);
+  }, [edges, mitigativeChainIndexByNodeId, mitigativeColumns, nodes, readOnly, setEdges, setNodes]);
 
   const toggleCollapse = useCallback((nodeId: string, side: "left" | "right") => {
+    if (readOnly) return;
     setNodes((existing) =>
       existing.map((node) => {
         if (node.id !== nodeId) return node;
@@ -999,7 +1020,7 @@ export function BowtieEditor({
         };
       }),
     );
-  }, [setNodes]);
+  }, [readOnly, setNodes]);
 
   const hiddenNodeIds = useMemo(() => {
     const nodeMap = new Map(nodes.map((node) => [node.id, node]));
@@ -1077,12 +1098,12 @@ export function BowtieEditor({
           node.data.type === "mitigative_barrier"
             ? (mitigativeChainIndexByNodeId[node.id] ?? node.data.chainIndex)
             : node.data.chainIndex,
-        quickAddLeft: quickAddOptionsFor(node.data.type, "left"),
-        quickAddRight: quickAddOptionsFor(node.data.type, "right"),
-        canCollapseLeft: hasNodeOnSide(node.id, "left"),
-        canCollapseRight: hasNodeOnSide(node.id, "right"),
-        onQuickAdd: quickAddNode,
-        onToggleCollapse: toggleCollapse,
+        quickAddLeft: readOnly ? [] : quickAddOptionsFor(node.data.type, "left"),
+        quickAddRight: readOnly ? [] : quickAddOptionsFor(node.data.type, "right"),
+        canCollapseLeft: readOnly ? false : hasNodeOnSide(node.id, "left"),
+        canCollapseRight: readOnly ? false : hasNodeOnSide(node.id, "right"),
+        onQuickAdd: readOnly ? undefined : quickAddNode,
+        onToggleCollapse: readOnly ? undefined : toggleCollapse,
       },
     }));
   }, [
@@ -1092,6 +1113,7 @@ export function BowtieEditor({
     mitigativeChainIndexByNodeId,
     mitigativeColumns,
     quickAddNode,
+    readOnly,
     toggleCollapse,
   ]);
 
@@ -1260,129 +1282,167 @@ export function BowtieEditor({
   return (
     <div className="flex h-[calc(100vh-4rem)] w-full">
       <div className="w-64 border-r border-[#9CA3AF] bg-[#E5E7EB] p-3">
-        <div className="mb-3 grid grid-cols-2 gap-1 rounded border border-[#9CA3AF] bg-white p-1">
-          <button
-            onClick={() => setViewMode("canvas")}
-            className={`rounded px-2 py-1 text-xs font-semibold ${
-              viewMode === "canvas" ? "bg-[#325D88] text-white" : "text-[#1F2933]"
-            }`}
-          >
-            Canvas
-          </button>
-          <button
-            onClick={() => setViewMode("worksheet")}
-            className={`rounded px-2 py-1 text-xs font-semibold ${
-              viewMode === "worksheet" ? "bg-[#325D88] text-white" : "text-[#1F2933]"
-            }`}
-          >
-            Worksheet
-          </button>
-        </div>
-
-        <h3 className="text-sm font-semibold text-[#1F2933]">Palette</h3>
-        <div className="mt-2 grid gap-2">
-          {Object.entries(NODE_TYPE_META).map(([type, meta]) => (
-            <button
-              key={type}
-              onClick={() => addNode(type as keyof typeof NODE_TYPE_META)}
-              className="rounded border border-[#9CA3AF] bg-white px-2 py-1 text-left text-xs text-[#1F2933]"
-            >
-              + {meta.label}
-            </button>
-          ))}
-        </div>
-
-        <h4 className="mt-4 text-xs font-semibold uppercase text-[#1F2933]/70">Quick Add</h4>
-        <div className="mt-1 space-y-1">
-          <button className="w-full rounded bg-[#f6dfdd] px-2 py-1 text-xs text-[#1F2933]" onClick={() => addNode("threat")}>
-            + Threat
-          </button>
-          <button className="w-full rounded bg-[#dce6f1] px-2 py-1 text-xs text-[#1F2933]" onClick={() => addNode("consequence")}>
-            + Consequence
-          </button>
-          <button
-            className="w-full rounded bg-[#f4e7ca] px-2 py-1 text-xs text-[#1F2933]"
-            onClick={() => addNode("preventive_barrier")}
-          >
-            + Barrier
-          </button>
-        </div>
-
-        <div className="mt-4 space-y-2">
-          <button onClick={saveCanvas} className="w-full rounded bg-[#325D88] px-2 py-1 text-xs text-white">
-            {saving ? "Saving..." : "Save Now"}
-          </button>
-          <button
-            onClick={deleteSelected}
-            disabled={selectedNodeIds.length === 0 && selectedEdgeIds.length === 0}
-            className="w-full rounded border border-[#C7514A] bg-[#f9eceb] px-2 py-1 text-xs text-[#C7514A] disabled:opacity-50"
-          >
-            Delete Selected
-          </button>
-          <div className="rounded border border-[#9CA3AF] bg-white p-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-[#1F2933]/75">
-              Export Builder
-            </p>
-            <div className="mt-2 grid gap-1">
-              <select
-                value={exportFormat}
-                onChange={(event) => setExportFormat(event.target.value as ExportFormat)}
-                className="rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs text-[#1F2933]"
-              >
-                <option value="png">Format: PNG</option>
-                <option value="pdf">Format: PDF</option>
-              </select>
-              <select
-                value={exportScope}
-                onChange={(event) => setExportScope(event.target.value as ExportScope)}
-                className="rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs text-[#1F2933]"
-              >
-                <option value="canvas">Scope: Canvas</option>
-                <option value="worksheet">Scope: Worksheet</option>
-                <option value="both">Scope: Both</option>
-              </select>
-              <select
-                value={exportSize}
-                onChange={(event) => setExportSize(event.target.value as ExportSize)}
-                className="rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs text-[#1F2933]"
-              >
-                <option value="small">Size: Small</option>
-                <option value="medium">Size: Medium</option>
-                <option value="large">Size: Large</option>
-              </select>
-              <button
-                onClick={() => void runExport()}
-                disabled={exporting}
-                className="rounded border border-[#9CA3AF] bg-[#325D88] px-2 py-1 text-xs font-semibold text-white disabled:opacity-70"
-              >
-                {exporting ? "Exporting..." : "Run Export"}
-              </button>
-              {exportMessage ? <p className="text-[11px] text-[#1F2933]/70">{exportMessage}</p> : null}
+        {readOnly ? (
+          <div className="space-y-4">
+            <div className="rounded border border-[#9CA3AF] bg-white p-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-[#325D88]">Example canvas</p>
+              <h3 className="mt-1 text-sm font-semibold text-[#1F2933]">{projectMeta.title}</h3>
+              <p className="mt-2 text-xs text-[#1F2933]/75">
+                Public demo for an AI data breach scenario. Pan and zoom the canvas to inspect how threats,
+                barriers, escalation factors, and consequences connect.
+              </p>
             </div>
+            <div className="rounded border border-[#9CA3AF] bg-white p-3 text-xs text-[#1F2933]/80">
+              <p>
+                Nodes: <strong>{nodes.length}</strong>
+              </p>
+              <p className="mt-1">
+                Connectors: <strong>{edges.length}</strong>
+              </p>
+              <p className="mt-3">
+                This view is read-only. Create an account to build and save your own bowties.
+              </p>
+            </div>
+            <Link
+              href="/login?mode=signup"
+              className="block rounded bg-[#325D88] px-3 py-2 text-center text-xs font-semibold text-white"
+            >
+              Create Your Own
+            </Link>
+            <Link
+              href="/"
+              className="block rounded border border-[#9CA3AF] bg-white px-3 py-2 text-center text-xs font-semibold text-[#1F2933]"
+            >
+              Back to Home
+            </Link>
           </div>
-          <button onClick={exportJson} className="w-full rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs text-[#1F2933]">
-            Export JSON
-          </button>
-          <label className="block cursor-pointer rounded border border-[#9CA3AF] bg-white px-2 py-1 text-center text-xs text-[#1F2933]">
-            Import JSON
-            <input type="file" accept="application/json" onChange={importJson} className="hidden" />
-          </label>
-        </div>
+        ) : (
+          <>
+            <div className="mb-3 grid grid-cols-2 gap-1 rounded border border-[#9CA3AF] bg-white p-1">
+              <button
+                onClick={() => setViewMode("canvas")}
+                className={`rounded px-2 py-1 text-xs font-semibold ${
+                  viewMode === "canvas" ? "bg-[#325D88] text-white" : "text-[#1F2933]"
+                }`}
+              >
+                Canvas
+              </button>
+              <button
+                onClick={() => setViewMode("worksheet")}
+                className={`rounded px-2 py-1 text-xs font-semibold ${
+                  viewMode === "worksheet" ? "bg-[#325D88] text-white" : "text-[#1F2933]"
+                }`}
+              >
+                Worksheet
+              </button>
+            </div>
 
-        {warnings.length > 0 ? (
-          <div className="mt-4 rounded border border-[#D4A547] bg-[#f8f1df] p-2 text-xs text-[#1F2933]">
-            <p className="font-semibold">Soft warnings</p>
-            <ul className="mt-1 list-disc pl-4">
-              {warnings.map((warning) => (
-                <li key={warning}>{warning}</li>
+            <h3 className="text-sm font-semibold text-[#1F2933]">Palette</h3>
+            <div className="mt-2 grid gap-2">
+              {Object.entries(NODE_TYPE_META).map(([type, meta]) => (
+                <button
+                  key={type}
+                  onClick={() => addNode(type as keyof typeof NODE_TYPE_META)}
+                  className="rounded border border-[#9CA3AF] bg-white px-2 py-1 text-left text-xs text-[#1F2933]"
+                >
+                  + {meta.label}
+                </button>
               ))}
-            </ul>
-          </div>
-        ) : null}
+            </div>
+
+            <h4 className="mt-4 text-xs font-semibold uppercase text-[#1F2933]/70">Quick Add</h4>
+            <div className="mt-1 space-y-1">
+              <button className="w-full rounded bg-[#f6dfdd] px-2 py-1 text-xs text-[#1F2933]" onClick={() => addNode("threat")}>
+                + Threat
+              </button>
+              <button className="w-full rounded bg-[#dce6f1] px-2 py-1 text-xs text-[#1F2933]" onClick={() => addNode("consequence")}>
+                + Consequence
+              </button>
+              <button
+                className="w-full rounded bg-[#f4e7ca] px-2 py-1 text-xs text-[#1F2933]"
+                onClick={() => addNode("preventive_barrier")}
+              >
+                + Barrier
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-2">
+              <button onClick={saveCanvas} className="w-full rounded bg-[#325D88] px-2 py-1 text-xs text-white">
+                {saving ? "Saving..." : "Save Now"}
+              </button>
+              <button
+                onClick={deleteSelected}
+                disabled={selectedNodeIds.length === 0 && selectedEdgeIds.length === 0}
+                className="w-full rounded border border-[#C7514A] bg-[#f9eceb] px-2 py-1 text-xs text-[#C7514A] disabled:opacity-50"
+              >
+                Delete Selected
+              </button>
+              <div className="rounded border border-[#9CA3AF] bg-white p-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-[#1F2933]/75">
+                  Export Builder
+                </p>
+                <div className="mt-2 grid gap-1">
+                  <select
+                    value={exportFormat}
+                    onChange={(event) => setExportFormat(event.target.value as ExportFormat)}
+                    className="rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs text-[#1F2933]"
+                  >
+                    <option value="png">Format: PNG</option>
+                    <option value="pdf">Format: PDF</option>
+                  </select>
+                  <select
+                    value={exportScope}
+                    onChange={(event) => setExportScope(event.target.value as ExportScope)}
+                    className="rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs text-[#1F2933]"
+                  >
+                    <option value="canvas">Scope: Canvas</option>
+                    <option value="worksheet">Scope: Worksheet</option>
+                    <option value="both">Scope: Both</option>
+                  </select>
+                  <select
+                    value={exportSize}
+                    onChange={(event) => setExportSize(event.target.value as ExportSize)}
+                    className="rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs text-[#1F2933]"
+                  >
+                    <option value="small">Size: Small</option>
+                    <option value="medium">Size: Medium</option>
+                    <option value="large">Size: Large</option>
+                  </select>
+                  <button
+                    onClick={() => void runExport()}
+                    disabled={exporting}
+                    className="rounded border border-[#9CA3AF] bg-[#325D88] px-2 py-1 text-xs font-semibold text-white disabled:opacity-70"
+                  >
+                    {exporting ? "Exporting..." : "Run Export"}
+                  </button>
+                  {exportMessage ? <p className="text-[11px] text-[#1F2933]/70">{exportMessage}</p> : null}
+                </div>
+              </div>
+              <button onClick={exportJson} className="w-full rounded border border-[#9CA3AF] bg-white px-2 py-1 text-xs text-[#1F2933]">
+                Export JSON
+              </button>
+              <label className="block cursor-pointer rounded border border-[#9CA3AF] bg-white px-2 py-1 text-center text-xs text-[#1F2933]">
+                Import JSON
+                <input type="file" accept="application/json" onChange={importJson} className="hidden" />
+              </label>
+            </div>
+
+            {warnings.length > 0 ? (
+              <div className="mt-4 rounded border border-[#D4A547] bg-[#f8f1df] p-2 text-xs text-[#1F2933]">
+                <p className="font-semibold">Soft warnings</p>
+                <ul className="mt-1 list-disc pl-4">
+                  {warnings.map((warning) => (
+                    <li key={warning}>{warning}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </>
+        )}
       </div>
 
       <div className="relative flex-1" ref={canvasRef}>
-        {viewMode === "canvas" ? (
+        {readOnly || viewMode === "canvas" ? (
           <>
             <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
               <div
@@ -1423,16 +1483,20 @@ export function BowtieEditor({
               nodes={viewNodes}
               edges={viewEdges}
               nodeTypes={nodeTypes}
-              onNodesChange={onNodesChangeLocked}
-              onEdgesChange={onEdgesChange}
-              onConnect={onConnect}
-              onSelectionChange={onSelectionChange}
-              onNodeClick={(_, node) => setSelectedId(node.id)}
-              onPaneClick={() => setSelectedId(null)}
+              onNodesChange={readOnly ? undefined : onNodesChangeLocked}
+              onEdgesChange={readOnly ? undefined : onEdgesChange}
+              onConnect={readOnly ? undefined : onConnect}
+              onSelectionChange={readOnly ? undefined : onSelectionChange}
+              onNodeClick={readOnly ? undefined : (_, node) => setSelectedId(node.id)}
+              onPaneClick={readOnly ? undefined : () => setSelectedId(null)}
               onMove={(_, nextViewport) => setViewport(nextViewport)}
               onInit={(instance: ReactFlowInstance) => initializeViewport(instance)}
               snapToGrid
               snapGrid={[12, 12]}
+              nodesDraggable={!readOnly}
+              nodesConnectable={!readOnly}
+              elementsSelectable={!readOnly}
+              panOnDrag
               deleteKeyCode={null}
             >
               <Background gap={12} size={1} />
@@ -1459,7 +1523,7 @@ export function BowtieEditor({
         )}
       </div>
 
-      {viewMode === "canvas" ? (
+      {readOnly ? null : viewMode === "canvas" ? (
         <InspectorPanel
           key={selectedId ?? "none"}
           selectedNode={selectedNode}

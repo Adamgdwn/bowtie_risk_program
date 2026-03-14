@@ -41,7 +41,7 @@ export default async function DashboardPage() {
       </section>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <CreateProjectForm />
+        <CreateProjectForm initialProjects={projects ?? []} />
         <aside className="brand-card h-fit rounded-2xl p-4 lg:sticky lg:top-24">
           <h2 className="brand-heading text-sm font-semibold">Quickstart Guide</h2>
           <p className="brand-text-muted mt-1 text-xs">
@@ -82,34 +82,6 @@ export default async function DashboardPage() {
           </div>
         </aside>
       </div>
-
-      <section className="brand-card mt-4 rounded-2xl p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="brand-heading text-sm font-semibold">Recent projects</h2>
-          <span className="brand-stat-pill rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-[#1F2933]/80">
-            most recent first
-          </span>
-        </div>
-        <div className="grid gap-2">
-          {(projects ?? []).map((project) => (
-            <Link
-              key={project.id}
-              href={`/projects/${project.id}`}
-              className="rounded-xl border border-[#9CA3AF] bg-white/85 p-3 text-sm transition hover:border-[#325D88] hover:bg-white"
-            >
-              <div className="brand-heading font-semibold">{project.title}</div>
-              <div className="brand-text-muted mt-0.5 text-xs">
-                {project.industry} | Top event: {project.top_event || "Not set"}
-              </div>
-            </Link>
-          ))}
-          {projects?.length === 0 ? (
-            <p className="brand-text-muted rounded-xl border border-dashed border-[#9CA3AF] p-3 text-sm">
-              No projects yet. Create your first bowtie above.
-            </p>
-          ) : null}
-        </div>
-      </section>
     </main>
   );
 }
