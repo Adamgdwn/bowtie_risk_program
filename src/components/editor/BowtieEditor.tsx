@@ -2208,8 +2208,96 @@ export function BowtieEditor({
   }
 
   return (
-    <div className="relative flex h-[calc(100vh-4rem)] w-full">
-      <div className="w-64 border-r border-[#9CA3AF] bg-[#E5E7EB] p-3">
+    <div className="relative flex h-[calc(100vh-4rem)] w-full flex-col">
+      {!readOnly ? (
+        showStarterGuide ? (
+          <div className="border-b border-[#9CA3AF] bg-white px-4 py-3">
+            <div className="flex flex-wrap items-start gap-3">
+              <div className="min-w-[180px] flex-1">
+                <div className="flex items-center gap-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-[#325D88]">Starter Guide</p>
+                  <span className="rounded-full border border-[#9CA3AF] px-2 py-1 text-[11px] font-semibold text-[#1F2933]/75">
+                    {guidedCompletionCount}/{guidedSteps.length}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-[#1F2933]/70">
+                  Follow the recommended order until the core bowtie structure is in place.
+                </p>
+              </div>
+              {recommendedStep ? (
+                <div className="min-w-[320px] flex-[1.5] rounded border border-[#D4A547]/60 bg-[#f8f1df] px-3 py-2">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-[220px] flex-1">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-[#7a5b10]">
+                        Recommended Next Action
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-[#1F2933]">{recommendedStep.title}</p>
+                      <p className="mt-1 text-xs text-[#1F2933]/75">{recommendedStep.detail}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {viewMode !== recommendedStep.preferredView ? (
+                        <button
+                          onClick={() => setViewMode(recommendedStep.preferredView)}
+                          className="rounded bg-[#325D88] px-3 py-2 text-xs font-semibold text-white"
+                        >
+                          {recommendedStep.preferredView === "worksheet" ? "Open Guided Worksheet" : "Open Canvas"}
+                        </button>
+                      ) : (
+                        <span className="rounded bg-[#e8eef7] px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-[#325D88]">
+                          Right Workspace
+                        </span>
+                      )}
+                      <button
+                        onClick={() => setStarterGuideDismissed(true)}
+                        className="rounded border border-[#9CA3AF] px-3 py-2 text-xs font-semibold text-[#1F2933]/70"
+                      >
+                        Hide
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+              <div className="flex min-w-[320px] flex-[1.5] flex-wrap gap-2">
+                {guidedSteps.map((step) => (
+                  <div key={step.id} className="min-w-[190px] flex-1 rounded border border-[#9CA3AF]/70 bg-[#F5F3F0] px-3 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold text-[#1F2933]">{step.title}</p>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
+                          step.done ? "bg-[#d8eadf] text-[#235f34]" : "bg-[#e2e8f0] text-[#475569]"
+                        }`}
+                      >
+                        {step.done ? "Done" : "Next"}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="border-b border-[#9CA3AF] bg-white px-4 py-2">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-[#325D88]">Core Structure Ready</p>
+                <p className="mt-1 text-xs text-[#1F2933]/75">
+                  Your bowtie has the main structure in place. Use the worksheet to add notes and ownership details,
+                  or stay on the canvas to refine barriers and export.
+                </p>
+              </div>
+              <button
+                onClick={() => setStarterGuideDismissed(false)}
+                className="rounded border border-[#9CA3AF] px-3 py-2 text-xs font-semibold text-[#1F2933]/70"
+              >
+                Show Guide
+              </button>
+            </div>
+          </div>
+        )
+      ) : null}
+
+      <div className="flex min-h-0 flex-1">
+        <div className="w-64 border-r border-[#9CA3AF] bg-[#E5E7EB] p-3">
         {readOnly ? (
           <div className="space-y-4">
             <div className="rounded border border-[#9CA3AF] bg-white p-3">
@@ -2421,97 +2509,9 @@ export function BowtieEditor({
             ) : null}
           </>
         )}
-      </div>
+        </div>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        {!readOnly ? (
-          showStarterGuide ? (
-            <div className="border-b border-[#9CA3AF] bg-white px-4 py-3">
-              <div className="flex flex-wrap items-start gap-3">
-                <div className="min-w-[180px] flex-1">
-                  <div className="flex items-center gap-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-[#325D88]">Starter Guide</p>
-                    <span className="rounded-full border border-[#9CA3AF] px-2 py-1 text-[11px] font-semibold text-[#1F2933]/75">
-                      {guidedCompletionCount}/{guidedSteps.length}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs text-[#1F2933]/70">
-                    Follow the recommended order until the core bowtie structure is in place.
-                  </p>
-                </div>
-                {recommendedStep ? (
-                  <div className="min-w-[280px] flex-[1.4] rounded border border-[#D4A547]/60 bg-[#f8f1df] px-3 py-2">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="min-w-[200px] flex-1">
-                        <p className="text-[11px] font-semibold uppercase tracking-wider text-[#7a5b10]">
-                          Recommended Next Action
-                        </p>
-                        <p className="mt-1 text-sm font-semibold text-[#1F2933]">{recommendedStep.title}</p>
-                        <p className="mt-1 text-xs text-[#1F2933]/75">{recommendedStep.detail}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {viewMode !== recommendedStep.preferredView ? (
-                          <button
-                            onClick={() => setViewMode(recommendedStep.preferredView)}
-                            className="rounded bg-[#325D88] px-3 py-2 text-xs font-semibold text-white"
-                          >
-                            {recommendedStep.preferredView === "worksheet" ? "Open Guided Worksheet" : "Open Canvas"}
-                          </button>
-                        ) : (
-                          <span className="rounded bg-[#e8eef7] px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-[#325D88]">
-                            Right Workspace
-                          </span>
-                        )}
-                        <button
-                          onClick={() => setStarterGuideDismissed(true)}
-                          className="rounded border border-[#9CA3AF] px-3 py-2 text-xs font-semibold text-[#1F2933]/70"
-                        >
-                          Hide
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
-                <div className="flex min-w-[260px] flex-[1.2] flex-wrap gap-2">
-                  {guidedSteps.map((step) => (
-                    <div key={step.id} className="min-w-[180px] flex-1 rounded border border-[#9CA3AF]/70 bg-[#F5F3F0] px-3 py-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-xs font-semibold text-[#1F2933]">{step.title}</p>
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
-                            step.done ? "bg-[#d8eadf] text-[#235f34]" : "bg-[#e2e8f0] text-[#475569]"
-                          }`}
-                        >
-                          {step.done ? "Done" : "Next"}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="border-b border-[#9CA3AF] bg-white px-4 py-2">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-[#325D88]">Core Structure Ready</p>
-                  <p className="mt-1 text-xs text-[#1F2933]/75">
-                    Your bowtie has the main structure in place. Use the worksheet to add notes and ownership details,
-                    or stay on the canvas to refine barriers and export.
-                  </p>
-                </div>
-                <button
-                  onClick={() => setStarterGuideDismissed(false)}
-                  className="rounded border border-[#9CA3AF] px-3 py-2 text-xs font-semibold text-[#1F2933]/70"
-                >
-                  Show Guide
-                </button>
-              </div>
-            </div>
-          )
-        ) : null}
-
-        <div className="relative min-h-0 flex-1" ref={canvasRef}>
+        <div className="relative min-w-0 flex-1" ref={canvasRef}>
           {readOnly || viewMode === "canvas" ? (
             <>
               <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
@@ -2603,6 +2603,65 @@ export function BowtieEditor({
             />
           )}
         </div>
+        {readOnly ? null : viewMode === "canvas" ? (
+          <InspectorPanel
+            key={selectedId ?? "none"}
+            selectedNode={selectedNode}
+            projectMeta={projectMeta}
+            contextGraph={{ nodes, edges }}
+            onUpdateNode={onUpdateNode}
+            onInsertSuggestions={onInsertSuggestions}
+          />
+        ) : (
+          <aside className="w-80 border-l border-[#9CA3AF] bg-[#E5E7EB] p-4 text-sm text-[#1F2933]">
+            <h3 className="font-semibold text-[#1F2933]">Worksheet Guidance</h3>
+            <p className="mt-1 text-xs font-semibold text-[#1F2933]">{worksheetStepTitle}</p>
+            {worksheetGuidanceLoading ? (
+              <p className="mt-3 text-xs text-[#1F2933]/70">Generating LLM facilitation prompts...</p>
+            ) : null}
+            {worksheetGuidanceError ? (
+              <p className="mt-3 text-xs text-[#C7514A]">{worksheetGuidanceError}</p>
+            ) : null}
+            {worksheetGuidance ? (
+              <div className="mt-3 space-y-3">
+                <div className="rounded border border-[#9CA3AF] bg-white p-2">
+                  <p className="text-xs font-semibold text-[#1F2933]">{worksheetGuidance.headline}</p>
+                  <p className="mt-1 text-[11px] text-[#1F2933]/65">
+                    Source: {worksheetGuidance.source.toUpperCase()}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-[#1F2933]">Discussion Prompts</p>
+                  <ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-[#1F2933]">
+                    {worksheetGuidance.discussionPrompts.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-[#1F2933]">Quality Checks</p>
+                  <ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-[#1F2933]">
+                    {worksheetGuidance.qualityChecks.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-[#1F2933]">Suggested Next Actions</p>
+                  <ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-[#1F2933]">
+                    {worksheetGuidance.nextActions.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            ) : (
+              <p className="mt-3 text-xs text-[#1F2933]/70">
+                Click into a step&apos;s notes box to generate interactive LLM workshop guidance.
+              </p>
+            )}
+          </aside>
+        )}
       </div>
 
       {toasts.length > 0 ? (
@@ -2617,66 +2676,6 @@ export function BowtieEditor({
           ))}
         </div>
       ) : null}
-
-      {readOnly ? null : viewMode === "canvas" ? (
-        <InspectorPanel
-          key={selectedId ?? "none"}
-          selectedNode={selectedNode}
-          projectMeta={projectMeta}
-          contextGraph={{ nodes, edges }}
-          onUpdateNode={onUpdateNode}
-          onInsertSuggestions={onInsertSuggestions}
-        />
-      ) : (
-        <aside className="w-80 border-l border-[#9CA3AF] bg-[#E5E7EB] p-4 text-sm text-[#1F2933]">
-          <h3 className="font-semibold text-[#1F2933]">Worksheet Guidance</h3>
-          <p className="mt-1 text-xs font-semibold text-[#1F2933]">{worksheetStepTitle}</p>
-          {worksheetGuidanceLoading ? (
-            <p className="mt-3 text-xs text-[#1F2933]/70">Generating LLM facilitation prompts...</p>
-          ) : null}
-          {worksheetGuidanceError ? (
-            <p className="mt-3 text-xs text-[#C7514A]">{worksheetGuidanceError}</p>
-          ) : null}
-          {worksheetGuidance ? (
-            <div className="mt-3 space-y-3">
-              <div className="rounded border border-[#9CA3AF] bg-white p-2">
-                <p className="text-xs font-semibold text-[#1F2933]">{worksheetGuidance.headline}</p>
-                <p className="mt-1 text-[11px] text-[#1F2933]/65">
-                  Source: {worksheetGuidance.source.toUpperCase()}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-[#1F2933]">Discussion Prompts</p>
-                <ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-[#1F2933]">
-                  {worksheetGuidance.discussionPrompts.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-[#1F2933]">Quality Checks</p>
-                <ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-[#1F2933]">
-                  {worksheetGuidance.qualityChecks.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-[#1F2933]">Suggested Next Actions</p>
-                <ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-[#1F2933]">
-                  {worksheetGuidance.nextActions.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          ) : (
-            <p className="mt-3 text-xs text-[#1F2933]/70">
-              Click into a step&apos;s notes box to generate interactive LLM workshop guidance.
-            </p>
-          )}
-        </aside>
-      )}
     </div>
   );
 }
