@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+const canonicalUrl = "https://www.bowtietool.com";
+
 const securityHeaders = [
   {
     key: "Content-Security-Policy",
@@ -34,6 +36,22 @@ const nextConfig: NextConfig = {
       {
         source: "/:path*",
         headers: securityHeaders,
+      },
+    ];
+  },
+  async redirects() {
+    return [
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "bowtietool.com" }],
+        destination: `${canonicalUrl}/:path*`,
+        permanent: true,
+      },
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "bowtie-risk-program.vercel.app" }],
+        destination: `${canonicalUrl}/:path*`,
+        permanent: true,
       },
     ];
   },
