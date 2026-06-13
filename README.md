@@ -2,6 +2,14 @@
 
 Next.js + TypeScript MVP for building Bowtie diagrams with guided structure, drag-and-drop editing, AI suggestion placeholders, Supabase auth/data, and Stripe subscription hooks.
 
+## Public Project Snapshot
+
+- **Audience:** risk practitioners, safety reviewers, consultants, and teams that need a structured way to explain threats, barriers, top events, and consequences.
+- **Best for:** bowtie diagrams, risk review workbooks, visual barrier thinking, and guided risk conversations that need exportable artifacts.
+- **Primary workflow:** create a project, map the bowtie structure, add barriers and escalation controls, review worksheet guidance, then export canvas or worksheet outputs.
+- **License:** MIT. You can use, modify, and adapt the project; production use still requires your own Supabase, Stripe, and model-provider setup.
+- **Contributions:** issues and pull requests are welcome when they improve risk-review clarity, editor reliability, exports, documentation, or safe integration setup. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Implemented
 
 - Supabase email/password auth with signup verification messaging.
@@ -155,3 +163,7 @@ npm run dev
 ## Testing Resources
 
 - Tester rollout package: `docs/TESTER_PACK.md`
+
+## License
+
+MIT
